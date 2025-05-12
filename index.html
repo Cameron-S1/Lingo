@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      /* Basic Light Theme (Default) */
+      body {
+        background-color: #ffffff;
+        color: #212529;
+        transition: background-color 0.3s, color 0.3s; /* Smooth transition */
+        margin: 0; /* Reset default margin */
+        font-family: sans-serif; /* Basic font */
+      }
+
+      /* Basic Dark Theme */
+      body.dark {
+        background-color: #212529;
+        color: #dee2e6;
+      }
+
+      /* Example adjustments for dark theme (can be expanded) */
+      body.dark button {
+          /* Add specific styles later */
+      }
+       body.dark input,
+       body.dark select,
+       body.dark textarea {
+           /* Add specific styles later */
+       }
+       body.dark table th,
+       body.dark table td {
+         /* Add specific styles later */
+       }
+       body.dark li {
+         /* Add specific styles later */
+       }
+       body.dark pre {
+         /* Add specific styles later */
+       }
+       /* Add more specific overrides as needed */
+
+       /* Processing Modal Styling */
+       .processing-modal-content {
+         background-color: #ffffff; /* Light mode background */
+         color: #212529; /* Light mode text */
+       }
+
+       body.dark .processing-modal-content {
+         background-color: #343a40; /* Darker background for modal */
+         color: #f8f9fa; /* Lighter text for modal */
+         border: 1px solid #6c757d; /* Optional border */
+       }
+       body.dark .processing-modal-content button {
+           background-color: #6c757d;
+           color: #ffffff;
+           border-color: #5a6268;
+       }
+       /* Adjust spinner colors for dark mode if needed */
+       body.dark .processing-modal-content div[style*="animation: spin"] {
+           border: 4px solid #495057; /* Darker light grey */
+           borderTop: 4px solid #0d6efd; /* Adjust blue if needed */
+       }
+
+       /* Review List Item Styling */
+       .review-list-item {
+         background-color: #f9f9f9; /* Default light background */
+         border: 1px solid #ccc; /* Default light border */
+         padding: 10px;
+         border-radius: 4px;
+         /* transition: background-color 0.3s, border-color 0.3s; */ /* Optional transition */
+       }
+       .review-list-item pre { /* Styling for the snippet block */
+            background-color: #eee;
+            border: 1px solid #ddd;
+            /* color: initial; */ /* Ensure text color resets if needed */
+       }
+       body.dark .review-list-item {
+         background-color: #3e444a; /* Darker background for list items */
+         border-color: #6c757d; /* Darker border */
+         color: #dee2e6; /* Ensure text inside is light */
+       }
+       /* Specific overrides for elements inside dark review items */
+       body.dark .review-list-item strong {
+           /* color: #f8f9fa; */ /* Make bold text lighter if needed */
+       }
+        body.dark .review-list-item small {
+           color: #adb5bd; /* Make small text lighter gray if needed */
+       }
+       body.dark .review-list-item pre {
+           background-color: #495057;
+           border-color: #6c757d;
+           color: #f8f9fa; /* Make preformatted text light */
+       }
+       body.dark .review-list-item div[style*="borderLeft"] { /* The existing entry column */
+           border-left-color: #6c757d !important; /* Make divider darker */
+       }
+       body.dark .review-list-item div[style*="borderTop"] { /* The action button divider */
+            border-top-color: #6c757d !important;
+       }
+       .review-snippet-pre { /* Light mode for snippet */
+           background-color: #eee;
+           border: 1px solid #ddd;
+           padding: 5px; /* Added padding here */
+           color: #212529; /* Ensure default text color for light mode */
+           border-radius: 3px;
+       }
+       body.dark .review-snippet-pre { /* Dark mode for snippet */
+           background-color: #495057;
+           border-color: #6c757d;
+           color: #f8f9fa; /* Make preformatted text light */
+           /* padding is inherited or set above */
+       }
+
+      /* Processed Note History Item Styling */
+      .processed-note-history-item {
+        background-color: #f9f9f9;
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 4px;
+      }
+      .history-snippet-pre {
+        background-color: #f0f0f0; /* Slightly different for history or same as review-snippet-pre */
+        border: 1px solid #ddd;
+        padding: 5px;
+        color: #212529;
+        border-radius: 3px;
+      }
+      body.dark .processed-note-history-item {
+        background-color: #3e444a;
+        border-color: #6c757d;
+        color: #dee2e6;
+      }
+      body.dark .processed-note-history-item strong {
+        /* color: #f8f9fa; */ /* Handled by parent color usually */
+      }
+      body.dark .processed-note-history-item div[style*="color: #555"] { /* For 'Processed on' and 'Log Entry ID' text */
+        color: #adb5bd !important; /* Lighter gray for these details in dark mode */
+      }
+      body.dark .history-snippet-pre {
+        background-color: #495057;
+        border-color: #6c757d;
+        color: #f8f9fa;
+      }
+
+
+       /* Settings Popup Styling */
+       .settings-popup-content {
+         background-color: #ffffff; /* Light mode background */
+         color: #212529; /* Light mode text */
+       }
+       body.dark .settings-popup-content {
+         background-color: #2c3034; /* Slightly different dark shade for popups */
+         color: #f8f9fa;
+         border: 1px solid #565e64;
+       }
+       body.dark .settings-popup-content h3,
+       body.dark .settings-popup-content h4 { /* Added h4 */
+         color: #f8f9fa; /* Ensure headers are light */
+       }
+       body.dark .settings-popup-content p {
+         color: #dee2e6; /* Ensure paragraph text is light */
+       }
+       body.dark .settings-popup-content small {
+         color: #adb5bd; /* Lighter gray for small text */
+       }
+       body.dark .settings-popup-content hr {
+         border-color: #495057; /* Darker hr */
+       }
+       body.dark .settings-popup-content input[type="password"],
+       body.dark .settings-popup-content input[type="text"],
+       body.dark .settings-popup-content select { /* Added select here */
+         background-color: #343a40;
+         color: #f8f9fa;
+         border: 1px solid #565e64;
+       }
+       body.dark .settings-popup-content button {
+         background-color: #6c757d;
+         color: #ffffff;
+         border-color: #5a6268;
+       }
+       body.dark .settings-popup-content a {
+           color: #8ab4f8; /* Lighter blue for links in dark mode */
+       }
+       /* Adjust close button color for dark mode */
+        body.dark .settings-popup-content button[title="Close"] {
+            color: #dee2e6;
+            background: none; /* Ensure no background overrides */
+            border: none;
+        }
+
+      /* Log Entry Modal Styling */
+      .log-entry-modal-content {
+        background-color: #ffffff; /* Light mode default */
+        color: #212529; /* Light mode text default */
+      }
+      body.dark .log-entry-modal-content {
+        background-color: #2c3034; /* Dark background for modal */
+        color: #f8f9fa; /* Light text for modal */
+        border: 1px solid #565e64; /* Optional border for definition */
+      }
+      body.dark .log-entry-modal-content h2 {
+        color: #f8f9fa;
+      }
+      body.dark .log-entry-modal-content hr {
+        border-color: #495057;
+      }
+      body.dark .log-entry-modal-content label {
+        color: #dee2e6; /* Ensure labels are light */
+      }
+      body.dark .log-entry-modal-content input[type="text"],
+      body.dark .log-entry-modal-content textarea,
+      body.dark .log-entry-modal-content select {
+        background-color: #343a40;
+        color: #f8f9fa;
+        border: 1px solid #565e64;
+      }
+      /* Specific button styling in modal if needed, defaults might be okay */
+      body.dark .log-entry-modal-content button {
+        /* Default dark button style from above settings-popup might suffice */
+        /* Example: Cancel button might need specific styling if it's not themed by default */
+      }
+      body.dark .log-entry-modal-content button[type="button"] { /* Generic cancel button */
+        background-color: #495057;
+        color: #f8f9fa;
+        border: 1px solid #565e64;
+      }
+       body.dark .log-entry-modal-content button[type="submit"] { /* Save/Update button */
+        background-color: #007bff; /* Keep primary color, or choose a dark-mode friendly variant */
+        color: #ffffff;
+      }
+      body.dark .log-entry-modal-content button[title="Close"] {
+          color: #dee2e6;
+          background: none;
+          border: none;
+      }
+
+
+       /* Welcome Screen Styling */
+       body.dark .welcome-screen-container,
+       body.dark .welcome-screen-container h1,
+       body.dark .welcome-screen-container h2,
+       body.dark .welcome-screen-container p,
+       body.dark .welcome-screen-container label {
+         color: #dee2e6 !important; /* Lighter text for dark mode, !important to ensure override */
+       }
+       body.dark .welcome-screen-container button[title="Settings"] {
+         color: #dee2e6; /* Ensure settings gear icon is visible */
+       }
+       body.dark .welcome-screen-container button {
+         /* General button styling for dark mode, can be refined */
+         /* background-color: #5a6268; */
+         /* color: #ffffff; */
+         /* border-color: #4e555b; */
+       }
+       body.dark .welcome-screen-container input[type="text"] {
+           /* background-color: #343a40; */
+           /* color: #f8f9fa; */
+           /* border: 1px solid #565e64; */
+       }
+       body.dark .welcome-screen-container h2 {
+         border-bottom-color: #495057; /* Darker border for h2 underline */
+       }
+    </style>
+    <title>Vite + React + TS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/renderer.tsx"></script>
+  </body>
+</html>

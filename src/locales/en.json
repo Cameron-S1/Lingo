@@ -1,0 +1,177 @@
+{
+  "appName": "AI Grammar Log",
+  "tabs": {
+    "grammarLog": "Grammar Log",
+    "sourceNotes": "Source Notes",
+    "review": "Review",
+    "settings": "Settings"
+  },
+  "buttons": {
+    "addEntry": "+ Add Entry",
+    "clearLog": "Clear Log",
+    "importAndAnalyze": "Import & Analyze Notes",
+    "clearAllPending": "Clear All Pending",
+    "approve": "Approve",
+    "delete": "Delete",
+    "edit": "Edit",
+    "saveKey": "Save Key",
+    "cancel": "Cancel",
+    "addLanguage": "Add Language",
+    "switchLanguage": "Switch Language",
+    "confirmDelete": "Yes, Delete All",
+    "toggleDarkMode": "Toggle Dark Mode"
+  },
+  "welcomeScreen": {
+    "title": "Welcome to AI Grammar Log",
+    "instructions": "Please select or add a language to begin.",
+    "selectLanguage": "Select Language:",
+    "noLanguages": "No languages found. Add one below:",
+    "addNewLanguage": "Add New Language:",
+    "languageName": "Name:",
+    "languageNamePlaceholder": "e.g., Japanese",
+    "nativeName": "Native Name:",
+    "nativeNamePlaceholder": "e.g., 日本語 (Optional)"
+  },
+  "grammarLogView": {
+    "searchLabel": "Search:",
+    "searchPlaceholder": "Target/Native/Notes...",
+    "categoryLabel": "Category:",
+    "allCategories": "All Categories",
+    "headers": {
+      "id": "ID",
+      "target": "Target",
+      "native": "Native",
+      "category": "Category",
+      "kanji": "Kanji",
+      "reading": "Reading",
+      "romanization": "Romanization",
+      "notes": "Notes",
+      "actions": "Actions"
+    },
+    "notesMarkers": {
+      "example": "(Ex)",
+      "system": "(Sys)"
+    },
+    "tooltips": {
+      "id": "Added: {added}\nUpdated: {updated}",
+      "sortById": "Sort by ID",
+      "sortByTarget": "Sort by Target",
+      "sortByNative": "Sort by Native",
+      "sortByCategory": "Sort by Category",
+      "sortByKanji": "Sort by Kanji/Character Form",
+      "sortByReading": "Sort by Kana/Reading Form",
+      "sortByRomanization": "Sort by Romanization",
+      "deleteEntry": "Delete Entry",
+      "editEntry": "Edit Entry",
+      "clearLog": "Clear All Entries"
+    },
+    "clearLogConfirm": "Are you sure you want to delete ALL entries for {language}? This cannot be undone.",
+    "noEntries": "No log entries found for this language. Click '+ Add Entry' or 'Clear Log' above.",
+    "noEntriesMatch": "No log entries match the current search/filter criteria."
+  },
+  "sourceNotesView": {
+    "title": "Source Notes ({language})",
+    "importInstruction": "Import notes from supported files (.txt, .md, .docx) to populate your Grammar Log.",
+    "processing": "Processing...",
+    "processingFiles": "Processing {count} file(s)...",
+    "processedHistory": "Processed Note History (Coming Soon)",
+    "historyDescription": "A view of the successfully processed notes from imported files will appear here.",
+    "batchComplete": "Batch processing complete. Processed {processedCount} of {totalCount} files. Total added: {added}. Total for review: {reviewed}.",
+    "batchCompleteWithError": "Batch processing complete with errors. Processed {processedCount} of {totalCount} files. Added: {added}. For review: {reviewed}. Errors: {errors}"
+  },
+  "reviewView": {
+    "title": "Review Pending Items ({language})",
+    "description": "Items flagged during import (duplicates, errors) appear here. Approve (adds to log), Delete, or Edit them.",
+    "loading": "Loading review items...",
+    "noItems": "No pending items to review for this language.",
+    "reviewItemHeader": "Review Item (ID: {id})",
+    "existingEntryHeader": "Existing Entry (ID: {id})",
+    "editedMarker": "(Edited)",
+    "fields": {
+      "type": "Type:",
+      "target": "Target:",
+      "native": "Native:",
+      "category": "Category:",
+      "notes": "Notes:",
+      "example": "Example:",
+      "kanji": "Kanji/Character:",
+      "kana": "Kana/Reading:",
+      "romanization": "Romanization:",
+      "writingSystemNote": "Writing System Note:",
+      "status": "Status:",
+      "created": "Created:",
+      "added": "Added:",
+      "updated": "Updated:",
+      "fullSnippet": "Full Snippet:",
+      "aiSuggestion": "AI Suggestion/Error:"
+    },
+    "tooltips": {
+        "clearAllPending": "Delete all items currently in the pending review list",
+        "approve": "Approve this item and add it to the Grammar Log (if not already present)",
+        "approveEdited": "Approve with edited data",
+        "delete": "Permanently delete this review item",
+        "edit": "Edit this item before approving"
+    },
+    "approving": "Approving...",
+    "deleting": "Deleting...",
+    "clearing": "Clearing...",
+    "approveError": "Approved item {id} but failed to remove it from review list. Manual cleanup might be needed.",
+    "deleteConfirm": "Are you sure you want to permanently delete this review item?",
+    "clearAllConfirm": "Are you sure you want to delete ALL {count} pending review items for {language}? This cannot be undone."
+  },
+  "settingsView": {
+    "title": "Settings",
+    "description": "Manage application settings below.",
+    "geminiKey": "Gemini API Key",
+    "geminiKeyDescription": "Enter your Gemini API key here. You can generate one from Google AI Studio.",
+    "geminiKeyLink": "Get an API Key",
+    "geminiKeyRequirement": "(Requires a Google account)",
+    "apiKeySaveSuccess": "API Key saved successfully!",
+    "appearance": "Appearance (Theme)",
+    "themeDescription": "Theme switching implemented. Further styling needed.",
+    "nativeLanguage": "Interface Language",
+    "nativeLanguageDescription": "Select the display language for the application itself."
+  },
+  "modal": {
+    "addTitle": "Add New Log Entry",
+    "editTitle": "Edit Log Entry",
+    "targetLabel": "Target Text*",
+    "nativeLabel": "Native Text",
+    "categoryLabel": "Category",
+    "notesLabel": "Notes",
+    "exampleLabel": "Example Sentence",
+    "kanjiLabel": "Kanji/Character Form",
+    "kanaLabel": "Kana/Reading Form",
+    "romanizationLabel": "Romanization (e.g., Hepburn)",
+    "writingSystemLabel": "Writing System Note",
+    "writingSystemPlaceholder": "e.g., Kanji+Okurigana, Katakana",
+    "saving": "Saving...",
+    "addButton": "Add Entry",
+    "updateButton": "Update Entry",
+    "validation": {
+      "targetEmpty": "Target text cannot be empty.",
+      "targetOrKanjiEmpty": "Target text or Kanji/Character form cannot both be empty."
+    }
+  },
+  "errors": {
+      "electronAPINotAvailable": "Electron API not available.",
+      "unknown": "An unknown error occurred.",
+      "fetchReviewItems": "An unknown error occurred while fetching review items.",
+      "languageIdNotFound": "Cannot perform action: Language ID not found.",
+      "addLogEntryExists": "Entry for \"{targetText}\" already exists.",
+      "clearLogIdNotFound": "Cannot clear log: Language ID not found.",
+      "clearLogError": "An unknown error occurred while clearing the log.",
+      "deleteEntryError": "An unknown error occurred while deleting.",
+      "deleteEntryNotFound": "Entry not found or could not be deleted.",
+      "updateEntryNotFound": "Failed to update entry. It might have been deleted.",
+      "apiKeySaveFailed": "Failed to save API key.",
+      "nativeLangSaveFailed": "Failed to save native language."
+  },
+  "settingsPopup": {
+    "title": "Settings",
+    "appearanceTitle": "Appearance",
+    "switchToLightMode": "Switch to Light Mode",
+    "switchToDarkMode": "Switch to Dark Mode",
+    "moreSettingsComing": "More settings (like native language selection) coming soon."
+  }
+}

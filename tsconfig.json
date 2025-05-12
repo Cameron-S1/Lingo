@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["DOM", "ES2020"],
+    "jsx": "react-jsx", // Use the new JSX transform
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "baseUrl": "./",
+    "paths": {
+      "*": ["node_modules/*"]
+    },
+    "types": ["node", "vite/client"] // Explicitly include Node and Vite client types
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", ".vscode", "dist", "dist-electron"] // Exclude build output dirs
+}
