@@ -92,4 +92,4 @@ This project is licensed under the Mozilla Public License Version 2.0 (MPL 2.0).
 The full text of the license is also included in the `LICENSE` file in the root directory of this project.
 
 ---
-*Version: As of May 11, 2025 (No formal versioning system in place)*
+*Version: 1.0.0*
