@@ -41,7 +41,7 @@ The core innovation is leveraging AI (specifically Google's Gemini models via us
 
 ### Installation
 
-1.  Clone the repository (if applicable) or download the source code.
+1.  Clone the repository or download the source code.
 2.  Navigate to the project directory in your terminal.
 3.  Install dependencies:
     ```bash
