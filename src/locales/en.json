@@ -51,7 +51,9 @@
     },
     "notesMarkers": {
       "example": "(Ex)",
-      "system": "(Sys)"
+      "system": "(Sys)",
+      "exampleFull": "Example: {example}",
+      "systemFull": "System Note: {note}"
     },
     "tooltips": {
       "id": "Added: {added}\nUpdated: {updated}",

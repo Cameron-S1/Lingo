@@ -27,20 +27,24 @@ export interface ElectronAPI {
   createLanguage: (languageName: string) => Promise<{ success: boolean; languageName: string }>;
   deleteLanguageLog: (languageName: string) => Promise<{ success: boolean }>; // Deletes the DB file
 
-  // Global Settings operations (Unchanged)
+  // Global Settings operations
   getSetting: (key: string) => Promise<string | null>;
-  setSetting: (key: string, value: string) => Promise<boolean>; // In main.ts, returns true. Adjust return type if needed.
+  setSetting: (key: string, value: string) => Promise<boolean>; 
+
+  // Language UI Settings operations (NEW)
+  getLanguageUISetting: (languageName: string, key: string) => Promise<string | null>;
+  setLanguageUISetting: (languageName: string, key: string, value: string) => Promise<void>;
 
   // Log Entry operations (ADAPTED: takes languageName)
   addLogEntry: (languageName: string, data: LogEntryData) => Promise<number>;
   findLogEntryByTarget: (languageName: string, targetText: string) => Promise<LogEntry | null>;
-  getLogEntries: (languageName: string, options?: GetLogEntriesOptions) => Promise<LogEntry[]>; // Use imported options type
+  getLogEntries: (languageName: string, options?: GetLogEntriesOptions) => Promise<LogEntry[]>; 
   getLogEntriesByIds: (languageName: string, entryIds: number[]) => Promise<LogEntry[]>;
   updateLogEntry: (languageName: string, id: number, updates: Partial<LogEntryData>) => Promise<boolean>;
   deleteLogEntry: (languageName: string, id: number) => Promise<boolean>;
-  clearLogEntriesForLanguage: (languageName: string) => Promise<{ success: boolean; rowsAffected: number }>; // Clears rows WITHIN a language DB
+  clearLogEntriesForLanguage: (languageName: string) => Promise<{ success: boolean; rowsAffected: number }>; 
 
-  // Dialog/File operations (Unchanged)
+  // Dialog/File operations 
   showOpenDialog: () => Promise<string[] | null>;
 
   // Note Processing operations (ADAPTED: takes languageName)
@@ -48,17 +52,16 @@ export interface ElectronAPI {
 
   // Source Note Processed operations (ADAPTED: takes languageName)
   addSourceNoteProcessed: (languageName: string, data: SourceNoteProcessedData) => Promise<number>;
-  getSourceNotesProcessed: (languageName: string, options?: any) => Promise<SourceNoteProcessed[]>; // Keep options 'any' for now
+  getSourceNotesProcessed: (languageName: string, options?: any) => Promise<SourceNoteProcessed[]>; 
 
   // Review Item operations (ADAPTED: takes languageName)
   addReviewItem: (languageName: string, data: ReviewItemData) => Promise<number>;
   getReviewItems: (languageName: string, status?: ReviewStatus) => Promise<ReviewItem[]>;
   updateReviewItemStatus: (languageName: string, id: number, newStatus: ReviewStatus) => Promise<boolean>;
   deleteReviewItem: (languageName: string, id: number) => Promise<boolean>;
-  clearReviewItemsForLanguage: (languageName: string, status?: ReviewStatus) => Promise<{ success: boolean; rowsAffected: number }>; // Clears rows WITHIN a language DB
+  clearReviewItemsForLanguage: (languageName: string, status?: ReviewStatus) => Promise<{ success: boolean; rowsAffected: number }>; 
 }
 
-// Expose methods using the updated signatures and new/changed channel names
 const api: ElectronAPI = {
   // Basic IPC
   invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
@@ -80,8 +83,12 @@ const api: ElectronAPI = {
   deleteLanguageLog: (languageName: string) => ipcRenderer.invoke('languages:deleteLog', languageName),
 
   // --- Global Settings exposed to Renderer ---
-  getSetting: (key: string) => ipcRenderer.invoke('settings:get', key), // Changed channel name for consistency
-  setSetting: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value), // Changed channel name
+  getSetting: (key: string) => ipcRenderer.invoke('settings:get', key), 
+  setSetting: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value), 
+
+  // --- Language UI Settings exposed to Renderer ---
+  getLanguageUISetting: (languageName: string, key: string) => ipcRenderer.invoke('db:getLanguageUISetting', languageName, key),
+  setLanguageUISetting: (languageName: string, key: string, value: string) => ipcRenderer.invoke('db:setLanguageUISetting', languageName, key, value),
 
   // --- Language-Specific DB Operations exposed to Renderer ---
   // Log Entries

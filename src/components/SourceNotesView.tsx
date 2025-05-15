@@ -1,29 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../contexts/LanguageContext'; // Import language hook
-import ProcessingModal from './ProcessingModal'; // Import the new modal
-import type { SourceNoteProcessed } from '../database'; // Import the type
-import { useUI } from '../contexts/UIContext'; // For translations
+import { useLanguage } from '../contexts/LanguageContext'; 
+import ProcessingModal from './ProcessingModal'; 
+import type { SourceNoteProcessed } from '../database'; 
+import { useUI } from '../contexts/UIContext'; 
 
 type ProcessingStatus = 'idle' | 'selecting' | 'processing' | 'success' | 'error';
 
 const SourceNotesView: React.FC = () => {
-  const { selectedLanguageName } = useLanguage(); // Use selectedLanguageName
-  const { t } = useUI(); // For translations
-  // languageId state is removed
+  const { selectedLanguageName } = useLanguage(); 
+  const { t, toggleSourceNoteExpansion, isSourceNoteExpanded, theme } = useUI(); 
   const [status, setStatus] = useState<ProcessingStatus>('idle');
-  const [message, setMessage] = useState<string | null>(null); // For success/error messages
-  // processingError state seems redundant with message, let's use message for errors too.
+  const [message, setMessage] = useState<string | null>(null); 
   const [processedNotesHistory, setProcessedNotesHistory] = useState<SourceNoteProcessed[]>([]);
 
-  // useEffect for fetching languageId is removed.
-
-  // Fetch processed notes history when selectedLanguageName is available
   const fetchHistory = useCallback(async () => {
-    setProcessedNotesHistory([]); // Clear history on language change or if no language
+    setProcessedNotesHistory([]); 
     if (selectedLanguageName && window.electronAPI) {
       try {
         console.log(`SourceNotesView: Fetching processed notes history for language: ${selectedLanguageName}`);
-        // Pass selectedLanguageName
         const history = await window.electronAPI.getSourceNotesProcessed(selectedLanguageName);
         setProcessedNotesHistory(history);
         console.log(`SourceNotesView: Fetched ${history.length} history items for ${selectedLanguageName}.`);
@@ -32,15 +26,13 @@ const SourceNotesView: React.FC = () => {
         setMessage(t('errors.fetchHistoryFailed', { default: 'Failed to load processed notes history.' }));
       }
     }
-  }, [selectedLanguageName, t]); // Depend on selectedLanguageName and t
+  }, [selectedLanguageName, t]); 
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]); // fetchHistory is memoized with selectedLanguageName
-
+  }, [fetchHistory]); 
 
   const handleImportClick = async () => {
-    // Check selectedLanguageName
     if (!selectedLanguageName) {
       setMessage(t('errors.languageNotSelectedImport', { default: 'Error: Cannot import notes without an active language.'}));
       setStatus('error');
@@ -64,14 +56,13 @@ const SourceNotesView: React.FC = () => {
          setMessage(t('sourceNotesView.processingFiles', { count: filePaths.length, default: `Processing ${filePaths.length} file(s)...`}));
          console.log(`Starting processing for ${filePaths.length} files for language ${selectedLanguageName}:`, filePaths);
 
-         // Call processNoteFiles with selectedLanguageName
          const result = await window.electronAPI.processNoteFiles(selectedLanguageName, filePaths);
 
          if (result.success) {
            setStatus('success');
            setMessage(result.message);
            console.log(`Batch processing successful for ${selectedLanguageName}:`, result);
-           await fetchHistory(); // Refresh history after successful processing
+           await fetchHistory(); 
          } else {
            setStatus('error');
            setMessage(result.message || t('sourceNotesView.batchFailed', {default: 'Batch processing failed with errors.'}));
@@ -99,62 +90,120 @@ const SourceNotesView: React.FC = () => {
       setTimeout(() => setMessage(null), 4000);
    };
 
+  const handleToggleNoteExpansion = (noteId: number) => {
+    if (selectedLanguageName) {
+      toggleSourceNoteExpansion(selectedLanguageName, noteId);
+    }
+  };
+
+  const getPreSnippetStyle = (): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = { 
+      whiteSpace: 'pre-wrap', 
+      wordBreak: 'break-all', 
+      maxHeight: '150px', 
+      overflowY: 'auto', 
+      padding: '8px', 
+      borderRadius: '3px', 
+    };
+    if (theme === 'dark') {
+      return {
+        ...baseStyle,
+        backgroundColor: '#2E2E2E', 
+        color: '#E0E0E0', 
+        border: '1px solid #444' 
+      };
+    }
+    return {
+      ...baseStyle,
+      backgroundColor: '#f9f9f9',
+      color: '#333', 
+      border: '1px solid #eee'
+    };
+  };
+
+  const getDetailTextStyle = (): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {
+      marginTop: '5px', 
+      fontSize: '0.9em', 
+    };
+    if (theme === 'dark') {
+      return {
+        ...baseStyle,
+        color: '#AEAEAE' 
+      };
+    }
+    return {
+      ...baseStyle,
+      color: '#555' 
+    };
+  };
 
   return (
     <div>
-      {/* Display selectedLanguageName */}
       <h2>{t('sourceNotesView.title', { language: selectedLanguageName || 'N/A' })}</h2>
       <p>{t('sourceNotesView.importInstruction')}</p>
 
        <div style={{ margin: '20px 0' }}>
          <button
             onClick={handleImportClick}
-            // Disable based on selectedLanguageName
             disabled={status === 'processing' || status === 'selecting' || !selectedLanguageName}
             title={t('sourceNotesView.importTooltip', { default: "Select one or more .txt, .md, or .docx files to import"})}
             style={{ padding: '10px 15px', cursor: 'pointer' }}
           >
            {status === 'selecting' ? t('sourceNotesView.selecting', {default: 'Selecting...'}) : t('buttons.importAndAnalyze')}
          </button>
-         {/* Check selectedLanguageName */}
          {(!selectedLanguageName) && <p style={{ color: 'orange', marginTop: '5px' }}>{t('errors.noActiveLanguage', {default: 'No active language selected.'})}</p>}
          {message && status !== 'processing' && <p style={{ marginTop: '10px', color: status === 'error' ? 'red' : (status === 'success' ? 'green' : 'black') }}>{message}</p>}
        </div>
 
-      {/* Display for processed notes history */}
       <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
         <h3>{t('sourceNotesView.processedHistoryTitle', {default: 'Processed Note History'})}</h3>
-        {/* Show loading/empty state based on selectedLanguageName */}
         {!selectedLanguageName ? (
             <p>{t('errors.selectLanguageViewHistory', {default: "Select a language to view its processed note history."})}</p>
         ) : processedNotesHistory.length === 0 ? (
           <p>{t('sourceNotesView.noHistory', {language: selectedLanguageName, default: `No processed notes found for ${selectedLanguageName}, or history is loading.`})}</p>
         ) : (
           <ul style={{ listStyleType: 'none', paddingLeft: 0 }}>
-            {processedNotesHistory.map(note => (
-              <li key={note.id} className="processed-note-history-item" style={{ marginBottom: '15px' }}>
-                <div><strong>{t('sourceNotesView.historyFile', {default: 'File:'})}</strong> {note.source_file || 'N/A'}</div>
-                {note.original_snippet && (
-                  <div style={{ marginTop: '5px' }}>
-                    <strong>{t('sourceNotesView.historySnippet', {default: 'Snippet:'})}</strong>
-                    <pre className="history-snippet-pre" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '100px', overflowY: 'auto' }}>
-                      {note.original_snippet}
-                    </pre>
+            {processedNotesHistory.map(note => {
+              const isExpanded = selectedLanguageName ? isSourceNoteExpanded(selectedLanguageName, note.id) : false;
+              return (
+                <li key={note.id} className="processed-note-history-item" style={{ marginBottom: '15px', border: '1px solid #ddd', padding: '10px', borderRadius: '4px' }}>
+                  <div 
+                    onClick={() => handleToggleNoteExpansion(note.id)} 
+                    style={{ cursor: 'pointer', fontWeight: 'bold' }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleToggleNoteExpansion(note.id); }}
+                    aria-expanded={isExpanded}
+                    aria-controls={`note-details-${note.id}`}
+                  >
+                    {isExpanded ? '▼' : '►'} {t('sourceNotesView.historyFile', {default: 'File:'})} {note.source_file || 'N/A'}
                   </div>
-                )}
-                <div style={{ marginTop: '5px', fontSize: '0.9em', color: '#555' }}>
-                  <strong>{t('sourceNotesView.historyProcessedOn', {default: 'Processed on:'})}</strong> {new Date(note.created_at).toLocaleString()}
-                </div>
-                {note.log_entry_id && (
-                  <div style={{ fontSize: '0.9em', color: '#555' }}><strong>{t('sourceNotesView.historyLogEntryId', {default: 'Log Entry ID:'})}</strong> {note.log_entry_id}</div>
-                )}
-              </li>
-            ))}
+                  {isExpanded && (
+                    <div id={`note-details-${note.id}`} style={{ marginTop: '10px', paddingLeft: '20px' }}>
+                      {note.original_snippet && (
+                        <div style={{ marginTop: '5px' }}>
+                          <strong>{t('sourceNotesView.historySnippet', {default: 'Snippet:'})}</strong>
+                          <pre className="history-snippet-pre" style={getPreSnippetStyle()}>
+                            {note.original_snippet}
+                          </pre>
+                        </div>
+                      )}
+                      <div style={getDetailTextStyle()}>
+                        <strong>{t('sourceNotesView.historyProcessedOn', {default: 'Processed on:'})}</strong> {new Date(note.created_at).toLocaleString()}
+                      </div>
+                      {note.log_entry_id && (
+                        <div style={getDetailTextStyle()}><strong>{t('sourceNotesView.historyLogEntryId', {default: 'Log Entry ID:'})}</strong> {note.log_entry_id}</div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
 
-      {/* Processing Modal */}
       <ProcessingModal
             isOpen={status === 'processing'}
             message={message || t('sourceNotesView.processingDefaultMessage', {default: 'Processing selected files...'})}

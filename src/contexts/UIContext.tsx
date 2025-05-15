@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback, Rea
 import enTranslations from '../locales/en.json'; // Import default English strings
 
 // --- Locale Definitions ---
-export const SUPPORTED_LOCALES = ['en', 'ja', 'fr', 'de', 'es', 'pt', 'ru'] as const; // Export for use in Settings
+export const SUPPORTED_LOCALES = ['en', 'ja', 'fr', 'de', 'es', 'pt', 'ru'] as const; 
 type Locale = typeof SUPPORTED_LOCALES[number];
 type LocaleData = Record<string, any>;
 
@@ -18,6 +18,10 @@ interface UIContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  // For SourceNotesView collapsible items
+  sourceNotesExpansion: Record<string, Record<number, boolean>>;
+  toggleSourceNoteExpansion: (languageName: string, noteId: number) => void;
+  isSourceNoteExpanded: (languageName: string, noteId: number) => boolean;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -28,7 +32,6 @@ interface UIProviderProps {
 
 // --- Helper Functions ---
 const translate = (data: LocaleData, key: string, replacements?: Record<string, string | number>): string => {
-  // (Translation logic as before)
   const keys = key.split('.');
   let result: any = data;
   for (const k of keys) {
@@ -50,11 +53,10 @@ const translate = (data: LocaleData, key: string, replacements?: Record<string, 
   return result;
 };
 
-// Function to apply theme class to body
 const applyTheme = (theme: Theme) => {
     const body = document.body;
-    body.classList.remove(...SUPPORTED_THEMES); // Remove any existing theme classes
-    body.classList.add(theme); // Add the new theme class
+    body.classList.remove(...SUPPORTED_THEMES); 
+    body.classList.add(theme); 
     console.log(`Applied theme class: ${theme}`);
 };
 
@@ -64,22 +66,24 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
   const [locale, setLocaleState] = useState<Locale>('en');
   const [translations, setTranslations] = useState<LocaleData>(enTranslations);
   // Theme State
-  const [theme, setThemeState] = useState<Theme>('dark'); // Default to dark
+  const [theme, setThemeState] = useState<Theme>('dark'); 
+  // SourceNotesView Expansion State
+  const [sourceNotesExpansion, setSourceNotesExpansion] = useState<Record<string, Record<number, boolean>>>({});
 
   // --- Locale Logic ---
   const setLocale = useCallback(async (newLocale: Locale) => {
-    if (newLocale === locale && translations !== enTranslations && Object.keys(translations).length > 0) { // Check if translations are already loaded for current non-english locale
+    if (newLocale === locale && translations !== enTranslations && Object.keys(translations).length > 0) { 
         console.log(`Locale ${newLocale} is already active with translations loaded.`);
         return;
     }
-    if (newLocale === 'en' && locale === 'en' && translations === enTranslations) { // Avoid reloading 'en' if already set
+    if (newLocale === 'en' && locale === 'en' && translations === enTranslations) { 
         console.log('Locale "en" is already active.');
         return;
     }
 
     console.log(`Attempting to set UI locale to: ${newLocale}`);
     try {
-      let newTranslations: LocaleData = enTranslations; // Default to English
+      let newTranslations: LocaleData = enTranslations; 
       if (newLocale === 'en') {
         newTranslations = enTranslations;
       } else if (newLocale === 'ja') {
@@ -102,11 +106,10 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
         newTranslations = module.default;
       } else {
         console.warn(`Unsupported locale: ${newLocale}. Defaulting to English.`);
-        // newLocale remains 'en' implicitly as per initial state or fallback.
       }
 
       setTranslations(newTranslations);
-      setLocaleState(newLocale); // Set the actual new locale
+      setLocaleState(newLocale); 
 
       if (window.electronAPI) {
         await window.electronAPI.setSetting('uiLanguage', newLocale);
@@ -116,7 +119,6 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error(`Error setting locale to ${newLocale}:`, error);
-      // Fallback to English if loading fails for some reason
       setTranslations(enTranslations);
       setLocaleState('en');
       if (window.electronAPI) {
@@ -131,7 +133,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
       console.log(`Attempting to set theme to: ${newTheme}`);
       try {
           setThemeState(newTheme);
-          applyTheme(newTheme); // Apply class to body
+          applyTheme(newTheme); 
           if (window.electronAPI) {
               await window.electronAPI.setSetting('uiTheme', newTheme);
               console.log(`Theme set to: ${newTheme} and saved.`);
@@ -145,7 +147,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
 
   const toggleTheme = useCallback(() => {
       const newTheme = theme === 'light' ? 'dark' : 'light';
-      setTheme(newTheme); // Calls setTheme which handles saving and applying
+      setTheme(newTheme); 
   }, [theme, setTheme]);
 
   // --- Translation Function ---
@@ -153,18 +155,33 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     return translate(translations, key, replacements);
   }, [translations]);
 
+  // --- Source Notes Expansion Logic ---
+  const toggleSourceNoteExpansion = useCallback((languageName: string, noteId: number) => {
+    setSourceNotesExpansion(prev => {
+      const langExpansion = prev[languageName] || {};
+      return {
+        ...prev,
+        [languageName]: {
+          ...langExpansion,
+          [noteId]: !langExpansion[noteId] // Toggle state, defaults to true if undefined
+        }
+      };
+    });
+  }, []);
+
+  const isSourceNoteExpanded = useCallback((languageName: string, noteId: number): boolean => {
+    return sourceNotesExpansion[languageName]?.[noteId] || false; // Default to false (collapsed)
+  }, [sourceNotesExpansion]);
+
   // --- Initial Load Logic ---
   useEffect(() => {
-    // Load Locale Preference
     const loadLocalePreference = async () => {
         if (window.electronAPI) {
             try {
                 const savedLocale = await window.electronAPI.getSetting('uiLanguage');
                 if (savedLocale && SUPPORTED_LOCALES.includes(savedLocale as Locale)) {
-                   // setLocale will handle not reloading if it's the same and already loaded
                    await setLocale(savedLocale as Locale);
                 } else {
-                  // If no saved locale, or invalid, ensure 'en' is loaded if not already
                   if (locale !== 'en' || Object.keys(translations).length === 0) {
                      await setLocale('en');
                   }
@@ -172,51 +189,59 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
              } catch (error) {
                 console.error("Failed to load UI language preference:", error);
                 if (locale !== 'en' || Object.keys(translations).length === 0) {
-                  await setLocale('en'); // Fallback on error
+                  await setLocale('en'); 
                 }
              }
         } else {
             console.warn('ElectronAPI not available on mount for locale loading.');
             if (locale !== 'en' || Object.keys(translations).length === 0) {
-              await setLocale('en'); // Ensure English is loaded if API is not there
+              await setLocale('en'); 
             }
         }
     };
 
-    // Load Theme Preference
      const loadThemePreference = async () => {
         if (window.electronAPI) {
             try {
                 const savedTheme = await window.electronAPI.getSetting('uiTheme');
-                const validTheme = savedTheme && SUPPORTED_THEMES.includes(savedTheme as Theme) ? savedTheme as Theme : 'dark'; // Default to dark if invalid/missing
+                const validTheme = savedTheme && SUPPORTED_THEMES.includes(savedTheme as Theme) ? savedTheme as Theme : 'dark'; 
                 if (validTheme !== theme) {
-                    setThemeState(validTheme); // Set state directly first
-                    applyTheme(validTheme); // Apply theme class
+                    setThemeState(validTheme); 
+                    applyTheme(validTheme); 
                     console.log("Loaded and applied theme preference:", validTheme);
                 } else {
-                     applyTheme(theme); // Apply default theme on initial load if no preference saved
+                     applyTheme(theme); 
                 }
             } catch (error) {
                  console.error("Failed to load UI theme preference:", error);
-                 applyTheme('dark'); // Fallback to dark on error
+                 applyTheme('dark'); 
             }
         } else {
             console.log("ElectronAPI not available on mount, applying default theme.");
-            applyTheme(theme); // Apply default theme if API not available
+            applyTheme(theme); 
         }
      };
 
-    loadLocalePreference(); // Call it
+    loadLocalePreference(); 
     loadThemePreference();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount, setLocale is memoized so it's safe here.
+  }, []); 
 
-  const value = { locale, setLocale, t, theme, setTheme, toggleTheme };
+  const value = { 
+    locale, 
+    setLocale, 
+    t, 
+    theme, 
+    setTheme, 
+    toggleTheme,
+    sourceNotesExpansion,
+    toggleSourceNoteExpansion,
+    isSourceNoteExpanded
+  };
 
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 };
 
-// Custom hook to use the UI context
 export const useUI = (): UIContextType => {
   const context = useContext(UIContext);
   if (context === undefined) {

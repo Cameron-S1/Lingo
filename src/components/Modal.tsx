@@ -3,13 +3,14 @@ import type { LogEntryData } from '../database'; // Assuming LogEntryData define
 import { GRAMMAR_CATEGORIES } from '../constants'; // Import the shared categories
 import { useUI } from '../contexts/UIContext'; // For translations
 
-interface ModalProps {
+export interface ModalProps { // Exporting for potential use elsewhere, good practice
 	isOpen: boolean;
 	onClose: () => void;
-	onSave: (data: Partial<LogEntryData>) => Promise<void>; // Changed: onSave is now async in GrammarLogView
+	onSave: (data: Partial<LogEntryData>) => Promise<void>;
 	initialData?: Partial<LogEntryData>;
 	mode: 'add' | 'edit';
-	// languageId prop removed
+	isSubmitting?: boolean; // New prop
+	submitError?: string | null; // New prop
 }
 
 const initialFormState: Partial<LogEntryData> = {
@@ -92,17 +93,23 @@ const buttonContainerStyle: React.CSSProperties = {
 	borderTop: '1px solid #eee'
 };
 
-// languageId removed from props destructuring
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, onSave, initialData, mode }) => {
-	const { t } = useUI(); // For translations
+const Modal: React.FC<ModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  initialData, 
+  mode, 
+  isSubmitting: parentIsSubmitting, // Renamed to avoid conflict with potential internal state if needed
+  submitError: parentSubmitError    // Renamed for clarity
+}) => {
+	const { t } = useUI(); 
 	const [formData, setFormData] = useState<Partial<LogEntryData>>(initialFormState);
-	const [isSaving, setIsSaving] = useState(false);
-    const [formError, setFormError] = useState<string | null>(null);
-
+  // For client-side validation errors within the modal itself
+  const [internalFormError, setInternalFormError] = useState<string | null>(null); 
 
 	useEffect(() => {
 		if (isOpen) {
-            setFormError(null); // Clear previous errors when modal opens
+            setInternalFormError(null); // Clear internal validation errors
             const defaultState = { ...initialFormState, category: initialFormState.category ?? GRAMMAR_CATEGORIES[0] };
 			setFormData(mode === 'edit' && initialData ? { ...defaultState, ...initialData } : defaultState);
 		}
@@ -115,23 +122,16 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, onSave, initialData, mod
 
 	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
-        setFormError(null); // Clear previous error
+    setInternalFormError(null); // Clear previous internal validation error
+
 		if (!formData.target_text?.trim() && !formData.kanji_form?.trim()) {
-            setFormError(t('modal.validation.targetOrKanjiEmpty', { default: 'Target text or Kanji/Character form cannot both be empty.' }));
+      setInternalFormError(t('modal.validation.targetOrKanjiEmpty', { default: 'Target text or Kanji/Character form cannot both be empty.' }));
 			return;
 		}
-		setIsSaving(true);
-		try {
-            // language_id is no longer part of LogEntryData, so don't add it.
-            // The onSave callback (handleModalSave in GrammarLogView) will use selectedLanguageName.
-			await onSave({ ...formData });
-			// Parent (GrammarLogView) is responsible for closing modal on successful save via its onSave logic
-		} catch (error) { // This catch might not be hit if onSave itself handles errors and doesn't rethrow
-			console.error("Error during modal save (likely from onSave callback):", error);
-            setFormError(error instanceof Error ? error.message : t('errors.saveFailed', { default: "Failed to save entry." }));
-		} finally {
-			setIsSaving(false);
-		}
+		// onSave is an async function passed from GrammarLogView which handles its own try/catch
+    // and updates parent's isSubmittingEntry and modalError states.
+    // The Modal component itself no longer needs to manage 'isSaving' or re-set 'formError' from the save promise.
+		await onSave({ ...formData }); 
 	};
 
 	if (!isOpen) {
@@ -170,7 +170,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, onSave, initialData, mod
 						<label style={labelStyle} htmlFor="example_sentence">{t('modal.exampleLabel')}</label>
 						<textarea style={textareaStyle} id="example_sentence" name="example_sentence" value={formData.example_sentence ?? ''} onChange={handleChange}></textarea>
 					</div>
-					{/* New Fields */}
 					<div style={formRowStyle}>
 						<label style={labelStyle} htmlFor="kanji_form">{t('modal.kanjiLabel')}</label>
 						<input style={inputStyle} type="text" id="kanji_form" name="kanji_form" value={formData.kanji_form ?? ''} onChange={handleChange} />
@@ -188,12 +187,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, onSave, initialData, mod
 						<input style={inputStyle} type="text" id="writing_system_note" name="writing_system_note" value={formData.writing_system_note ?? ''} onChange={handleChange} placeholder={t('modal.writingSystemPlaceholder')} />
 					</div>
 
-                    {formError && <p style={{ color: 'red', marginTop: '10px', marginBottom: '0' }}>{formError}</p>}
+          {/* Display internal client-side validation error */}
+          {internalFormError && <p style={{ color: 'red', marginTop: '10px', marginBottom: '0' }}>{internalFormError}</p>}
+          {/* Display submission error from parent */}
+          {parentSubmitError && <p style={{ color: 'red', marginTop: '10px', marginBottom: '0' }}>{parentSubmitError}</p>}
 
 					<div style={buttonContainerStyle}>
 						<button type="button" onClick={onClose} style={{ marginRight: '10px', padding: '8px 15px', cursor: 'pointer' }}>{t('buttons.cancel')}</button>
-						<button type="submit" disabled={isSaving} style={{ padding: '8px 15px', cursor: 'pointer', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
-							{isSaving ? t('modal.saving', { default: 'Saving...'}) : (mode === 'edit' ? t('modal.updateButton') : t('modal.addButton'))}
+						<button type="submit" disabled={parentIsSubmitting} style={{ padding: '8px 15px', cursor: 'pointer', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}>
+							{parentIsSubmitting ? t('modal.saving', { default: 'Saving...'}) : (mode === 'edit' ? t('modal.updateButton') : t('modal.addButton'))}
 						</button>
 					</div>
 				</form>

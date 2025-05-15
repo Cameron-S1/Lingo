@@ -21,6 +21,7 @@ The core innovation is leveraging AI (specifically Google's Gemini models via us
 *   **Refined Review System:** Focuses on content quality by flagging items needing attention. This includes potential homonym conflicts (same target word, different proposed translations), ambiguous AI interpretations (e.g., missing or unclear translations), content validation issues, or entries where the AI couldn't confidently categorize the data. (Note: Direct API processing errors are logged for debugging but generally do not create review items, keeping the review queue focused on content.)
 *   **Search & Filter:** Provides capabilities to search and filter grammar log entries.
 *   **Structured Log Entries:** Stores entries with fields for target text, native translation, category, notes, example sentences, and specific fields for character-based languages (e.g., Kanji, Kana, Romanization for Japanese).
+*   **Furigana Display on Hover (Japanese):** For Japanese entries, the AI attempts to generate Hiragana readings (Furigana) for individual Kanji characters within words. This data is stored and, in the Grammar Log, hovering over `kanji_form` or `target_text` cells containing these Kanji will display the Furigana above the respective characters using HTML `<ruby>` tags.
 
 ## Technologies Used
 
@@ -28,8 +29,8 @@ The core innovation is leveraging AI (specifically Google's Gemini models via us
 *   **Frontend:** React with TypeScript (Vite)
 *   **Styling:** CSS (with dark mode support)
 *   **State Management:** React Context
-*   **AI Integration:** Google Gemini API (requires user's own API key). The application automatically retries API calls if transient issues occur, including a 30-second delay and retry specifically for API rate limit responses.
-*   **Database:** SQLite3 (per-language databases for logs; a global database for application settings)
+*   **AI Integration:** Google Gemini API (requires user's own API key). The application automatically retries API calls if transient issues occur (including for rate limits) and includes enhanced error detection for `MAX_TOKENS`. AI is utilized for parsing notes and generating Furigana for Japanese Kanji.
+*   **Database:** SQLite3 (per-language databases for logs, including structured Furigana data for Japanese; a global database for application settings)
 *   **Internationalization (i18n):** Custom implementation using JSON locale files.
 
 ## Getting Started
@@ -84,6 +85,7 @@ The application uses `electron-log` for backend logging. Log files (e.g., `main.
 *   **Cloud Sync/Backup Options:** Offer functionality to synchronize or back up user data to a cloud service (with privacy considerations).
 *   **Advanced Theme Customization:** Allow users more control over UI appearance.
 *   **Plugin System/Extensibility:** Create an architecture that allows for community-developed plugins to extend application features.
+*   **Robust MAX_TOKENS Handling:** Implement a file-splitting strategy for very large notes to prevent API response truncation.
 
 ## Contributing
 
@@ -98,4 +100,4 @@ This project is licensed under the Mozilla Public License Version 2.0 (MPL 2.0).
 The full text of the license is also included in the `LICENSE` file in the root directory of this project.
 
 ---
-*Version: 1.2.0 (As of May 14, 2025)*
+*Version: 1.3.0 (As of May 15, 2025)*

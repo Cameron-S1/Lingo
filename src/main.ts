@@ -1,19 +1,17 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
-// Import NEW and ADAPTED database functions & types
 import {
-  // DB Management
   getDB, 
   closeLanguageDB,
   closeAllDatabases,
   listAvailableLanguages,
   createLanguage,
   deleteLanguageLog,
-  // Global Settings
   getSetting,
   setSetting,
-  // Language Specific Data Types
-  type LogEntry, // Make sure LogEntry is imported if used for existing entry type
+  getLanguageUISetting,
+  setLanguageUISetting,
+  type LogEntry, 
   type LogEntryData,
   type GetLogEntriesOptions,
   type SourceNoteProcessed,
@@ -22,7 +20,6 @@ import {
   type ReviewType,
   type ReviewStatus,
   type ReviewItemData,
-  // Adapted CRUD Operations
   addLogEntry,
   findLogEntryByTarget,
   getLogEntries,
@@ -38,8 +35,7 @@ import {
   deleteReviewItem,
   clearReviewItemsForLanguage
 } from './database';
-// Import the actual Gemini client function and its types
-import { analyzeNoteContent, type ExtractedItem, type AnalysisResult } from './geminiClient'; // Added AnalysisResult type import
+import { analyzeNoteContent, type ExtractedItem, type AnalysisResult, type FuriganaDetail } from './geminiClient'; // Added FuriganaDetail here for type clarity
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import mammoth from 'mammoth';
@@ -113,6 +109,27 @@ app.whenReady().then(() => {
        return true;
      } catch (error) { log.error(`Error handling settings:set for key '${key}':`, error); throw error; }
    });
+
+  // --- Language UI Settings Handlers ---
+  ipcMain.handle('db:getLanguageUISetting', async (_event, languageName: string, key: string) => {
+    log.info(`IPC: Handling db:getLanguageUISetting (Lang: ${languageName}, Key: ${key})`);
+    try {
+      if (!languageName || typeof languageName !== 'string' || languageName.trim().length === 0) { throw new Error('Invalid languageName provided for getLanguageUISetting.'); }
+      if (!key || typeof key !== 'string' || key.trim().length === 0) { throw new Error('Invalid key provided for getLanguageUISetting.'); }
+      return await getLanguageUISetting(languageName, key);
+    } catch (error) { log.error(`Error handling db:getLanguageUISetting for ${languageName}, key ${key}:`, error); throw error; }
+  });
+
+  ipcMain.handle('db:setLanguageUISetting', async (_event, languageName: string, key: string, value: string) => {
+    log.info(`IPC: Handling db:setLanguageUISetting (Lang: ${languageName}, Key: ${key})`);
+    try {
+      if (!languageName || typeof languageName !== 'string' || languageName.trim().length === 0) { throw new Error('Invalid languageName provided for setLanguageUISetting.'); }
+      if (!key || typeof key !== 'string' || key.trim().length === 0) { throw new Error('Invalid key provided for setLanguageUISetting.'); }
+      if (typeof value !== 'string') { throw new Error('Invalid value provided for setLanguageUISetting (must be a string).'); }
+      await setLanguageUISetting(languageName, key, value);
+      return true; 
+    } catch (error) { log.error(`Error handling db:setLanguageUISetting for ${languageName}, key ${key}:`, error); throw error; }
+  });
 
   // --- Log Entry Handlers ---
    ipcMain.handle('db:addLogEntry', async (_event, languageName: string, data: LogEntryData) => {
@@ -274,9 +291,9 @@ app.whenReady().then(() => {
                            if (isPotentialHomonym) {
                                log.warn(`Potential homonym conflict for "${item.target_text}" (Existing ID: ${existing.id}). Existing native: "${existing.native_text}", New AI native: "${item.native_text}". Creating review item.`);
                                const reviewData: ReviewItemData = {
-                                   review_type: 'duplicate', // Using 'duplicate' but with specific suggestion
+                                   review_type: 'duplicate', 
                                    target_text: item.target_text,
-                                   native_text: item.native_text, // AI's proposed native text
+                                   native_text: item.native_text, 
                                    ai_suggestion: `Potential homonym: Existing entry (ID: ${existing.id}) for "${item.target_text}" has native text: "${existing.native_text}". AI proposed a different native text: "${item.native_text}". Please review.`,
                                    original_snippet: item.original_snippet || item.target_text.substring(0,500),
                                    related_log_entry_id: existing.id,
@@ -288,9 +305,8 @@ app.whenReady().then(() => {
                                };
                                await addReviewItem(languageName, reviewData);
                                itemsForReview++;
-                               continue; // Skip merging for this item, let user resolve homonym
+                               continue; 
                            } else {
-                               // Not a homonym conflict, proceed with merge logic
                                const updates: Partial<LogEntryData> = {};
                                let madeUpdate = false;
 
@@ -302,7 +318,15 @@ app.whenReady().then(() => {
                                if ((!existing.kana_form || existing.kana_form.trim() === '') && item.kana_form) { updates.kana_form = item.kana_form; madeUpdate = true; }
                                if ((!existing.romanization || existing.romanization.trim() === '') && item.romanization) { updates.romanization = item.romanization; madeUpdate = true; }
                                if ((!existing.writing_system_note || existing.writing_system_note.trim() === '') && item.writing_system_note) { updates.writing_system_note = item.writing_system_note; madeUpdate = true; }
-                               
+                               // Check and add/update furigana_details
+                               if (item.furigana_details && (!existing.furigana_details || JSON.stringify(existing.furigana_details) !== JSON.stringify(item.furigana_details))) {
+                                    updates.furigana_details = item.furigana_details;
+                                    madeUpdate = true;
+                               } else if (!item.furigana_details && existing.furigana_details) { // If AI returns null but DB has it, preserve DB? Or clear it? For now, let's clear.
+                                    updates.furigana_details = null; // Explicitly set to null if AI doesn't provide it
+                                    madeUpdate = true;
+                               }
+
                                if (madeUpdate && Object.keys(updates).length > 0) {
                                    await updateLogEntry(languageName, existing.id, updates);
                                    entriesUpdated++;
@@ -311,7 +335,7 @@ app.whenReady().then(() => {
                                    log.info(`Duplicate item for target "${item.target_text}" (ID ${existing.id}), no new information to merge (or not a homonym conflict). Skipping.`);
                                }
                            }
-                       } else { // No existing entry, add new
+                       } else { 
                            const entryData: LogEntryData = {
                                 target_text: item.target_text,
                                 native_text: item.native_text ?? null,
@@ -321,7 +345,8 @@ app.whenReady().then(() => {
                                 kanji_form: item.kanji_form ?? null,
                                 kana_form: item.kana_form ?? null,
                                 romanization: item.romanization ?? null,
-                                writing_system_note: item.writing_system_note ?? null
+                                writing_system_note: item.writing_system_note ?? null,
+                                furigana_details: item.furigana_details ?? null // Pass furigana_details here
                             };
                            try {
                                await addLogEntry(languageName, entryData); entriesAdded++;
@@ -383,7 +408,6 @@ app.whenReady().then(() => {
        let filesProcessedSuccessfullyCount = 0;
        const attemptedFileNamesLogInitialPass: string[] = [];
 
-       // --- Initial Processing Pass (Concurrent) ---
        log.info(`Starting initial concurrent processing pass for ${filePaths.length} files for language ${languageName}.`);
        let processingPromises = filePaths.map(filePath => processSingleFile(filePath, languageName));
        let settledResults = await Promise.allSettled(processingPromises);
@@ -399,7 +423,6 @@ app.whenReady().then(() => {
                totalItemsForReview += fileResult.reviewed;
                totalEntriesUpdated += fileResult.updated;
 
-
                if (fileResult.skippedDueToRateLimit) {
                    log.warn(`File ${fileResult.fileName} hit rate limit on initial pass. Queuing for retry.`);
                    rateLimitedFilePathsQueue.push(originalFilePath);
@@ -409,7 +432,7 @@ app.whenReady().then(() => {
                } else {
                    filesProcessedSuccessfullyCount++;
                }
-           } else { // Promise was rejected
+           } else { 
                const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
                const errorMsg = `Catastrophic failure processing ${fileNameForLog} in initial pass (promise rejected): ${reason}`;
                log.error(errorMsg, result.reason);
@@ -418,7 +441,6 @@ app.whenReady().then(() => {
        });
        log.info(`Initial concurrent pass complete. Files attempted: ${attemptedFileNamesLogInitialPass.length}. Files queued for rate limit retry: ${rateLimitedFilePathsQueue.length}. Files processed without catastrophic error so far: ${filesProcessedSuccessfullyCount}`);
        
-       // --- Secondary Retry Pass for Rate-Limited Files (Concurrent) ---
        let finalRateLimitSkips = 0;
        const successfullyRetriedFileNames: string[] = [];
 
@@ -463,9 +485,7 @@ app.whenReady().then(() => {
            log.info(`Concurrent retry pass complete. Successfully retried: ${successfullyRetriedFileNames.length}. Files ultimately skipped/failed in retry pass: ${finalRateLimitSkips}`);
        }
 
-       // --- Construct Final Message ---
        const totalFilesAttempted = filePaths.length;
-
        let finalMessage = `Batch processing complete for ${languageName}. `;
        finalMessage += `Attempted: ${totalFilesAttempted} files. Files processed without fatal errors: ${filesProcessedSuccessfullyCount}. `;
        finalMessage += `Total entries added: ${totalEntriesAdded}. Total entries updated/merged: ${totalEntriesUpdated}. Total items for review: ${totalItemsForReview}.`;
