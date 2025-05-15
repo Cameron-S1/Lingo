@@ -1,7 +1,7 @@
 {
-  "name": "ai-grammar-log",
+  "name": "Lingo",
   "version": "1.0.0",
-  "description": "AI-powered Grammar Log Application",
+  "description": "AI-powered Grammar Language Learning",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -44,8 +44,8 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "com.electron.aigrammarlog",
-    "productName": "AI Grammar Log",
+    "appId": "com.electron.lingo",
+    "productName": "Lingo",
     "directories": {
       "output": "dist_electron_builder"
     },

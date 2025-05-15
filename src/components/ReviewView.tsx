@@ -1,131 +1,113 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import type { ReviewItem, LogEntryData, ReviewStatus, LogEntry } from '../database'; // Import LogEntry
-import Modal from './Modal'; // Import the Modal component
+import type { ReviewItem, LogEntryData, ReviewStatus, LogEntry } from '../database';
+import Modal from './Modal';
+import { useUI } from '../contexts/UIContext'; // For translations
 
 const ReviewView: React.FC = () => {
-	const { activeLanguage, activeLanguageId } = useLanguage();
+	const { selectedLanguageName } = useLanguage(); // Use selectedLanguageName
+    const { t } = useUI(); // For translations
 	const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
-	const [relatedLogEntries, setRelatedLogEntries] = useState<Map<number, LogEntry>>(new Map()); // Store related entries for duplicates
+	const [relatedLogEntries, setRelatedLogEntries] = useState<Map<number, LogEntry>>(new Map());
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [error, setError] = useState<string | null>(null);
-	const [actionItemId, setActionItemId] = useState<number | null>(null);
+	const [actionItemId, setActionItemId] = useState<number | null>(null); // For disabling buttons during action
 	const [isClearing, setIsClearing] = useState<boolean>(false);
 
 	// State for editing modal
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-	const [editingItem, setEditingItem] = useState<ReviewItem | null>(null); // The original item being edited
-	const [editedItemData, setEditedItemData] = useState<Partial<LogEntryData> | null>(null); // Holds changes from the modal
+	const [editingItem, setEditingItem] = useState<ReviewItem | null>(null);
+	const [editedItemData, setEditedItemData] = useState<Partial<LogEntryData> | null>(null);
 
-	// Helper to format date, assuming DB stores UTC without explicit timezone marker
 	const formatLocalDate = (dateString: string | null | undefined) => {
 		if (!dateString) return 'N/A';
-		try {
-			// Append 'Z' to indicate UTC before converting to local string
-			return new Date(dateString + 'Z').toLocaleString();
-		} catch (e) {
-			console.error("Error formatting date:", dateString, e);
-			return dateString; // Fallback to original string if parsing fails
-		}
+		try { return new Date(dateString + 'Z').toLocaleString(); }
+        catch (e) { console.error("Error formatting date:", dateString, e); return dateString; }
 	};
 
-
 	const fetchReviewItems = useCallback(async () => {
-		if (!activeLanguageId) {
+        // Use selectedLanguageName
+		if (!selectedLanguageName) {
 			setReviewItems([]);
-			setRelatedLogEntries(new Map()); // Clear related entries too
+			setRelatedLogEntries(new Map());
+            setError(null); // Clear error when no language selected
 			return;
 		}
 		setIsLoading(true);
 		setError(null);
-		setRelatedLogEntries(new Map()); // Clear previous related entries
-		console.log(`Fetching PENDING review items for language ID: ${activeLanguageId}`);
+		setRelatedLogEntries(new Map());
+		console.log(`Fetching PENDING review items for language: ${selectedLanguageName}`);
 		try {
 			if (!window.electronAPI) throw new Error('Electron API not available.');
 
-			// Fetch pending review items
-			const items = await window.electronAPI.getReviewItems(activeLanguageId, 'pending');
+            // Pass selectedLanguageName
+			const items = await window.electronAPI.getReviewItems(selectedLanguageName, 'pending');
 			setReviewItems(items);
-			console.log(`Fetched ${items.length} pending review items.`);
+			console.log(`Fetched ${items.length} pending review items for ${selectedLanguageName}.`);
 
-			// Fetch related log entries for duplicates
 			const duplicateItemsWithRefs = items.filter(item => item.review_type === 'duplicate' && item.related_log_entry_id != null);
 			const relatedEntryIds = duplicateItemsWithRefs.map(item => item.related_log_entry_id as number);
 
 			if (relatedEntryIds.length > 0) {
-				console.log(`Fetching related log entries for duplicate checks (IDs: ${relatedEntryIds.join(', ')})`);
-				const fetchedEntries = await window.electronAPI.getLogEntriesByIds(relatedEntryIds);
+				console.log(`Fetching related log entries for ${selectedLanguageName} (IDs: ${relatedEntryIds.join(', ')})`);
+                // Pass selectedLanguageName
+				const fetchedEntries = await window.electronAPI.getLogEntriesByIds(selectedLanguageName, relatedEntryIds);
 				const entriesMap = new Map(fetchedEntries.map(entry => [entry.id, entry]));
-				setRelatedLogEntries(entriesMap); // Just set the new map
-				console.log(`Fetched ${fetchedEntries.length} related log entries.`);
+				setRelatedLogEntries(entriesMap);
+				console.log(`Fetched ${fetchedEntries.length} related log entries for ${selectedLanguageName}.`);
 			}
 
 		} catch (err) {
-			console.error('Error fetching review items or related entries:', err);
-			setError(err instanceof Error ? err.message : 'An unknown error occurred while fetching review items.');
+			console.error(`Error fetching review items for ${selectedLanguageName}:`, err);
+			setError(err instanceof Error ? err.message : t('errors.fetchReviewItems'));
+            setReviewItems([]); // Clear items on error
 		} finally {
 			setIsLoading(false);
 		}
-	}, [activeLanguageId]);
+	}, [selectedLanguageName, t]); // Depend on selectedLanguageName and t
 
 	useEffect(() => {
 		fetchReviewItems();
 	}, [fetchReviewItems]);
 
-	// Handler for Approve
 	const handleApprove = async (item: ReviewItem) => {
-		if (!activeLanguageId) {
-			setError("Cannot approve item: Language ID not found.");
+		if (!selectedLanguageName) { // Check selectedLanguageName
+			setError(t('errors.languageNotSelected'));
 			return;
 		}
 		setActionItemId(item.id);
 		setError(null);
-		console.log(`Attempting to approve review item ${item.id}`);
+		console.log(`Attempting to approve review item ${item.id} for ${selectedLanguageName}`);
 
 		try {
 			if (!window.electronAPI) throw new Error('Electron API not available.');
-			if (!activeLanguageId) throw new Error("Language ID missing."); // Re-check just in case
 
-			// 1. Prepare data for the log entry
-			let logData: LogEntryData;
-			// Check if the currently stored edited data corresponds to the item being approved
+			let logData: LogEntryData; // No language_id here
 			const wasJustEdited = editedItemData && editingItem?.id === item.id;
 
 			if (wasJustEdited) {
 				console.log(`Using edited data for approval of item ${item.id}`);
-				// Use data from the editedItemData state, providing fallbacks just in case
-				logData = {
-					language_id: activeLanguageId,
-					target_text: editedItemData.target_text ?? item.target_text ?? '', // Ensure target isn't empty
+				logData = { // No language_id
+					target_text: editedItemData.target_text ?? item.target_text ?? '',
 					native_text: editedItemData.native_text ?? null,
-					category: editedItemData.category ?? '', // Category should ideally be set during edit
+					category: editedItemData.category ?? '',
 					notes: editedItemData.notes ?? null,
 					example_sentence: editedItemData.example_sentence ?? null,
-					// Add new fields from edited data
 					kanji_form: editedItemData.kanji_form ?? null,
 					kana_form: editedItemData.kana_form ?? null,
 					romanization: editedItemData.romanization ?? null,
 					writing_system_note: editedItemData.writing_system_note ?? null,
 				};
-				if (!logData.category) {
-					console.warn(`Approving item ${item.id} without a category set during edit.`);
-					// Consider adding validation or defaulting logic here if needed
-				}
+				if (!logData.category) console.warn(`Approving item ${item.id} without a category.`);
 			} else {
-				console.log(`Using original review item data for approval of item ${item.id} (auto-filled from AI/existing)`);
-                // Use original item data, trying AI extracted fields first, then related entry, then defaults
+				console.log(`Using original review item data for approval of item ${item.id}`);
                 const relatedEntryForFallback = (item.review_type === 'duplicate' && item.related_log_entry_id) ? relatedLogEntries.get(item.related_log_entry_id) : null;
-
-				logData = {
-					language_id: activeLanguageId,
-					target_text: item.target_text ?? '', // Should always exist if validation passed
+				logData = { // No language_id
+					target_text: item.target_text ?? '',
 					native_text: item.native_text ?? (relatedEntryForFallback?.native_text ?? null),
-					// Prioritize AI's guess, then related, then 'Other'
                     category: item.category_guess ?? (relatedEntryForFallback?.category ?? 'Other'),
-					// Prioritize snippet, then related, then null
 					notes: (item.original_snippet && item.original_snippet !== item.target_text ? item.original_snippet : undefined) ?? (relatedEntryForFallback?.notes ?? null),
-					// Prioritize AI extracted, then related, then null
-					example_sentence: relatedEntryForFallback?.example_sentence ?? null, // No direct AI field for this one
+					example_sentence: relatedEntryForFallback?.example_sentence ?? null,
 					kanji_form: item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? null),
 					kana_form: item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? null),
 					romanization: item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? null),
@@ -134,189 +116,157 @@ const ReviewView: React.FC = () => {
 				if (!logData.target_text) { throw new Error("Cannot approve item with empty target text."); }
 			}
 
-			// 2. Add to main log_entries table (checking for existing carefully)
-			console.log(`Adding/Checking approved item ${item.id} in log entries...`);
-			const existingEntry = await window.electronAPI.findLogEntryByTarget(activeLanguageId, logData.target_text);
-
-			// Only skip adding if an entry exists *and* it's not the original entry linked in a duplicate review
+			console.log(`Adding/Checking approved item ${item.id} in log entries for ${selectedLanguageName}...`);
+            // Pass selectedLanguageName
+			const existingEntry = await window.electronAPI.findLogEntryByTarget(selectedLanguageName, logData.target_text);
 			const shouldSkipAdd = existingEntry && existingEntry.id !== item.related_log_entry_id;
 
 			if (shouldSkipAdd) {
-				console.log(`Entry for "${logData.target_text}" already exists (ID: ${existingEntry.id}) and is not the related duplicate entry. Skipping add.`);
+				console.log(`Entry for "${logData.target_text}" already exists (ID: ${existingEntry.id}) in ${selectedLanguageName}. Skipping add.`);
 			} else {
-                // If it's the original duplicate entry or doesn't exist, add it.
-                // Note: This could overwrite the original duplicate if its data changed during review/edit.
-                // Consider adding logic for "Merge" later if needed.
-                console.log(existingEntry ? `Related duplicate entry found (ID: ${existingEntry.id}). Will add approved data.` : `No existing entry found for "${logData.target_text}". Adding new entry.`);
-				await window.electronAPI.addLogEntry(logData);
-				console.log(`Item ${item.id} data added to log entries successfully.`);
+                console.log(existingEntry ? `Related duplicate entry found (ID: ${existingEntry.id}). Will add approved data for ${selectedLanguageName}.` : `No existing entry found for "${logData.target_text}" in ${selectedLanguageName}. Adding new entry.`);
+                // Pass selectedLanguageName
+				await window.electronAPI.addLogEntry(selectedLanguageName, logData);
+				console.log(`Item ${item.id} data added to log entries for ${selectedLanguageName} successfully.`);
 			}
 
-			// 3. Delete the review item now that it's processed
-			console.log(`Deleting processed review item ${item.id}...`);
-			const deleteSuccess = await window.electronAPI.deleteReviewItem(item.id);
+			console.log(`Deleting processed review item ${item.id} for ${selectedLanguageName}...`);
+            // Pass selectedLanguageName
+			const deleteSuccess = await window.electronAPI.deleteReviewItem(selectedLanguageName, item.id);
 			if (!deleteSuccess) {
-				// Log error but continue, as the main goal (approval) might be done
-				console.error(`Failed to delete review item ${item.id} after successful approval/check.`);
-				setError(`Approved item ${item.id} but failed to remove it from review list. Manual cleanup might be needed.`);
+				console.error(`Failed to delete review item ${item.id} for ${selectedLanguageName} after approval.`);
+				setError(t('reviewView.approveError', { id: item.id }));
 			}
 
-			// 4. Clear editing state if this specific item was the one being edited
 			if (wasJustEdited) {
 				console.log(`Clearing editing state for item ${item.id}`);
 				setEditingItem(null);
 				setEditedItemData(null);
 			}
-
-			// 5. Refresh the review list to show changes
 			await fetchReviewItems();
-
 		} catch (err) {
-			console.error(`Error approving review item ${item.id}:`, err);
-			setError(err instanceof Error ? err.message : 'An unknown error occurred during approval.');
+			console.error(`Error approving review item ${item.id} for ${selectedLanguageName}:`, err);
+			setError(err instanceof Error ? err.message : t('errors.unknown'));
 		} finally {
-			// Ensure button disabling is reset even if errors occurred
 			setActionItemId(null);
 		}
 	};
 
-	// Handler for Delete Single Item
 	const handleDeleteItem = async (id: number) => {
-		if (!window.confirm('Are you sure you want to permanently delete this review item?')) {
-			return;
-		}
-		setActionItemId(id); // Disable buttons for this item
+        if (!selectedLanguageName) {
+            setError(t('errors.languageNotSelected'));
+            return;
+        }
+		if (!window.confirm(t('reviewView.deleteConfirm'))) return;
+
+		setActionItemId(id);
 		setError(null);
-		console.log(`Attempting to delete review item ${id}`);
+		console.log(`Attempting to delete review item ${id} for ${selectedLanguageName}`);
 		try {
 			if (!window.electronAPI) throw new Error('Electron API not available.');
-			const success = await window.electronAPI.deleteReviewItem(id);
+            // Pass selectedLanguageName
+			const success = await window.electronAPI.deleteReviewItem(selectedLanguageName, id);
 			if (success) {
-				console.log(`Review item ${id} deleted successfully.`);
-				// If the deleted item was the one being edited, clear the edit state
+				console.log(`Review item ${id} for ${selectedLanguageName} deleted successfully.`);
 				if (editingItem?.id === id) {
 					setEditingItem(null);
 					setEditedItemData(null);
 				}
-				await fetchReviewItems(); // Refresh the list
+				await fetchReviewItems();
 			} else {
 				throw new Error(`Failed to delete review item ${id}.`);
 			}
 		} catch (err) {
-			console.error(`Error deleting review item ${id}:`, err);
-			setError(err instanceof Error ? err.message : 'An unknown error occurred during deletion.');
+			console.error(`Error deleting review item ${id} for ${selectedLanguageName}:`, err);
+			setError(err instanceof Error ? err.message : t('errors.unknown'));
 		} finally {
-			setActionItemId(null); // Re-enable buttons
+			setActionItemId(null);
 		}
 	};
 
-	// Handler for Clear All Pending Reviews
 	const handleClearPendingReviews = async () => {
-		if (!activeLanguageId || reviewItems.length === 0) return;
-		if (!window.confirm(`Are you sure you want to delete ALL ${reviewItems.length} pending review items for ${activeLanguage}? This cannot be undone.`)) {
-			return;
-		}
-		setIsClearing(true); // Disable buttons globally
+		if (!selectedLanguageName || reviewItems.length === 0) return;
+		if (!window.confirm(t('reviewView.clearAllConfirm', { count: reviewItems.length, language: selectedLanguageName }))) return;
+
+		setIsClearing(true);
 		setError(null);
-		console.log(`Attempting to clear all pending review items for language ID: ${activeLanguageId}`);
+		console.log(`Attempting to clear all pending review items for language: ${selectedLanguageName}`);
 		try {
 			if (!window.electronAPI) throw new Error('Electron API not available.');
-			const result = await window.electronAPI.clearReviewItemsForLanguage(activeLanguageId, 'pending');
-			console.log(`Cleared ${result.rowsAffected} pending review items.`);
-			// Clear any potential lingering edit state after mass deletion
+            // Pass selectedLanguageName
+			const result = await window.electronAPI.clearReviewItemsForLanguage(selectedLanguageName, 'pending');
+			console.log(`Cleared ${result.rowsAffected} pending review items for ${selectedLanguageName}.`);
 			setEditingItem(null);
 			setEditedItemData(null);
-			await fetchReviewItems(); // Refresh the list
+			await fetchReviewItems();
 		} catch (err) {
-			console.error(`Error clearing pending review items:`, err);
-			setError(err instanceof Error ? err.message : 'An unknown error occurred while clearing reviews.');
+			console.error(`Error clearing pending review items for ${selectedLanguageName}:`, err);
+			setError(err instanceof Error ? err.message : t('errors.unknown'));
 		} finally {
-			setIsClearing(false); // Re-enable buttons
+			setIsClearing(false);
 		}
 	};
 
-	// --- Modal Handlers ---
-
 	const handleEditClick = (item: ReviewItem) => {
-		console.log(`Opening edit modal for review item ID: ${item.id}`);
-		setEditingItem(item); // Track which item is being edited
-
-        // Check if we already have edited data for this item, otherwise populate from original
-        // ** PRIORITIZE item's own AI extracted fields for prefill **
+        if (!selectedLanguageName) return; // Should not happen if item is displayed
+		console.log(`Opening edit modal for review item ID: ${item.id} for ${selectedLanguageName}`);
+		setEditingItem(item);
         const relatedEntryForFallback = (item.review_type === 'duplicate' && item.related_log_entry_id) ? relatedLogEntries.get(item.related_log_entry_id) : null;
-
         const prefillData = editedItemData && editingItem?.id === item.id ? editedItemData : {
             target_text: item.target_text ?? '',
-            native_text: item.native_text ?? '', // Use item's native if present, else empty
-            category: (item.category_guess ?? (relatedEntryForFallback?.category ?? undefined)) || '', // AI guess > Related > Empty
-            notes: ((item.original_snippet && item.original_snippet !== item.target_text ? item.original_snippet : undefined) ?? (relatedEntryForFallback?.notes ?? undefined)) || '', // Snippet > Related > Empty
-            example_sentence: relatedEntryForFallback?.example_sentence || '', // Only from related for now > Empty
-            kanji_form: (item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? undefined)) || '', // AI > Related > Empty
-            kana_form: (item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? undefined)) || '', // AI > Related > Empty
-            romanization: (item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? undefined)) || '', // AI > Related > Empty
-            writing_system_note: (item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? undefined)) || '', // AI > Related > Empty
+            native_text: item.native_text ?? '',
+            category: (item.category_guess ?? (relatedEntryForFallback?.category ?? undefined)) || '',
+            notes: ((item.original_snippet && item.original_snippet !== item.target_text ? item.original_snippet : undefined) ?? (relatedEntryForFallback?.notes ?? undefined)) || '',
+            example_sentence: relatedEntryForFallback?.example_sentence || '',
+            kanji_form: (item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? undefined)) || '',
+            kana_form: (item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? undefined)) || '',
+            romanization: (item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? undefined)) || '',
+            writing_system_note: (item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? undefined)) || '',
         };
-
-		setEditedItemData(prefillData as Partial<LogEntryData>); // Store the data for the modal
+		setEditedItemData(prefillData as Partial<LogEntryData>);
 		setIsModalOpen(true);
 	};
 
-	const handleModalClose = () => {
-		setIsModalOpen(false);
-		// Don't clear editingItem or editedItemData here - allow reopening the modal
-		// with the same item and its last edited state until approved/deleted/cleared.
-	};
+	const handleModalClose = () => setIsModalOpen(false);
 
-	const handleModalSave = (updatedData: Partial<LogEntryData>) => {
+	const handleModalSave = async (updatedData: Partial<LogEntryData>): Promise<void> => {
 		console.log("Saving edited data from modal to component state for item:", editingItem?.id, updatedData);
-		// Update the temporary state ONLY if an item is being edited
-		if (editingItem) {
-			setEditedItemData(updatedData); // Persist changes in state until approval
-		} else {
-			 console.error("Modal save called without an editing item set!");
-		}
-		handleModalClose(); // Close the modal after saving state
+		if (editingItem) setEditedItemData(updatedData);
+        else console.error("Modal save called without an editing item set!");
+		handleModalClose();
 	};
-
 
 	return (
 		<div>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-				<h2 style={{ margin: 0 }}>Review Pending Items {activeLanguage ? `(${activeLanguage})` : ''}</h2>
+				<h2 style={{ margin: 0 }}>{t('reviewView.title', { language: selectedLanguageName || 'N/A' })}</h2>
 				<button
 					onClick={handleClearPendingReviews}
-					disabled={reviewItems.length === 0 || isLoading || isClearing}
-					title="Delete all items currently in the pending review list"
+					disabled={!selectedLanguageName || reviewItems.length === 0 || isLoading || isClearing}
+					title={t('reviewView.tooltips.clearAllPending')}
 					style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: '#ffb300', color: 'black', border: 'none', borderRadius: '4px' }}
 				>
-					{isClearing ? 'Clearing...' : 'Clear All Pending'}
+					{isClearing ? t('clearing', {default: 'Clearing...'}) : t('buttons.clearAllPending')}
 				</button>
 			</div>
-			<p>Items flagged during import (duplicates, errors) appear here. Approve (adds to log), Delete, or Edit them.</p>
+			<p>{t('reviewView.description')}</p>
 
-			{isLoading && <p>Loading review items...</p>}
+			{isLoading && <p>{t('reviewView.loading')}</p>}
 			{error && <p style={{ color: 'red', border: '1px solid red', padding: '10px' }}>Error: {error}</p>}
-			{!isLoading && !error && reviewItems.length === 0 && <p>No pending items to review for this language.</p>}
+			{!selectedLanguageName && !isLoading && <p>{t('errors.selectLanguagePrompt', {default: 'Please select a language to review items.'})}</p>}
+            {selectedLanguageName && !isLoading && !error && reviewItems.length === 0 && <p>{t('reviewView.noItems')}</p>}
 
-			{!isLoading && !error && reviewItems.length > 0 && (
+			{selectedLanguageName && !isLoading && !error && reviewItems.length > 0 && (
 				<ul style={{ listStyle: 'none', padding: 0 }}>
 					{reviewItems.map((item) => {
-						// Find the related log entry if this is a duplicate
 						const existingEntry = (item.review_type === 'duplicate' && item.related_log_entry_id) ? relatedLogEntries.get(item.related_log_entry_id) : null;
-
-						// Check if this specific item has stored edited data matching the `editingItem` state
 						const isEdited = editingItem?.id === item.id && editedItemData;
-
-                        // --- START Updated Display Logic ---
-                        // Determine what data to display initially or if edited
                         let displayData: Record<string, string | null> = {};
-
                         if (isEdited && editedItemData) {
-                            // If actively being edited, use the latest edited data
                             displayData = {
                                 target: editedItemData.target_text ?? item.target_text ?? 'N/A',
                                 native: editedItemData.native_text ?? item.native_text ?? 'N/A',
-                                category: editedItemData.category ?? item.category_guess ?? 'N/A', // Fallback to guess if edit removes it
+                                category: editedItemData.category ?? item.category_guess ?? 'N/A',
                                 notes: editedItemData.notes ?? item.original_snippet ?? 'N/A',
                                 example: editedItemData.example_sentence ?? 'N/A',
                                 kanji: editedItemData.kanji_form ?? item.ai_extracted_kanji_form ?? 'N/A',
@@ -325,100 +275,86 @@ const ReviewView: React.FC = () => {
                                 sysNote: editedItemData.writing_system_note ?? item.ai_extracted_writing_system_note ?? 'N/A'
                             };
                         } else {
-                            // If not actively edited, display initial data prioritizing AI extractions
-                             const relatedEntryForFallback = existingEntry; // Already fetched
-
+                             const relatedEntryForFallback = existingEntry;
                             displayData = {
                                 target: item.target_text ?? 'N/A',
-                                native: item.native_text ?? 'N/A', // Show native text if provided in review item
-                                category: item.category_guess ?? (relatedEntryForFallback?.category ?? 'N/A'), // Prioritize AI guess
+                                native: item.native_text ?? 'N/A',
+                                category: item.category_guess ?? (relatedEntryForFallback?.category ?? 'N/A'),
                                 notes: (item.original_snippet && item.original_snippet !== item.target_text ? `(Snippet: ${item.original_snippet.substring(0, 50)}...)` : (relatedEntryForFallback?.notes ?? 'N/A')),
-                                example: relatedEntryForFallback?.example_sentence ?? 'N/A', // No direct AI field
-                                kanji: item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? 'N/A'), // Prioritize AI
-                                kana: item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? 'N/A'), // Prioritize AI
-                                roman: item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? 'N/A'), // Prioritize AI
-                                sysNote: item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? 'N/A') // Prioritize AI
+                                example: relatedEntryForFallback?.example_sentence ?? 'N/A',
+                                kanji: item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? 'N/A'),
+                                kana: item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? 'N/A'),
+                                roman: item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? 'N/A'),
+                                sysNote: item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? 'N/A')
                             };
                         }
-                        // --- END Updated Display Logic ---
-
 						return (
-							// Add className, remove background/border from inline style, keep dynamic border
 							<li key={item.id}
-                                className="review-list-item" // Add class name
+                                className="review-list-item"
                                 style={{
-                                    border: isEdited ? '2px solid #007bff' : '1px solid transparent', // Dynamic border color/width
-                                    marginBottom: '10px',
-                                    padding: '10px',
-                                    borderRadius: '4px',
-                                    // backgroundColor removed
+                                    border: isEdited ? '2px solid #007bff' : '1px solid transparent',
+                                    marginBottom: '10px', padding: '10px', borderRadius: '4px',
                                 }}
                             >
 								<div style={{ display: 'flex', justifyContent: 'space-between', gap: '15px' }}>
-									{/* Column for the review item details */}
 									<div style={{ flex: 1 }}>
-										<strong>Review Item (ID: {item.id})</strong> {isEdited && <span style={{color: '#007bff', fontWeight:'bold'}}>(Edited)</span>}<br />
-										<strong>Type:</strong> {item.review_type} <br />
-										<strong>Target:</strong> {displayData.target} <br />
-										<strong>Native:</strong> {displayData.native} <br />
-										<strong>Category:</strong> {displayData.category} <br />
-										<strong>Notes:</strong> {displayData.notes} <br />
-										<strong>Example:</strong> {displayData.example} <br />
-                                        <strong>Kanji/Character:</strong> {displayData.kanji} <br />
-                                        <strong>Kana/Reading:</strong> {displayData.kana} <br />
-                                        <strong>Romanization:</strong> {displayData.roman} <br />
-                                        <strong>Writing System Note:</strong> {displayData.sysNote} <br />
-
-										{item.original_snippet && !displayData.notes?.startsWith('(Snippet:') && <><strong>Full Snippet:</strong> <pre className="review-snippet-pre" style={{ whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>{item.original_snippet}</pre></>}
-										{item.ai_suggestion && <><strong>AI Suggestion/Error:</strong> {item.ai_suggestion} <br /></>}
-										<strong>Status:</strong> {item.status} <br />
-										<small>Created: {formatLocalDate(item.created_at)}</small>
+										<strong>{t('reviewView.reviewItemHeader', {id: item.id})}</strong> {isEdited && <span style={{color: '#007bff', fontWeight:'bold'}}>{t('reviewView.editedMarker')}</span>}<br />
+										<strong>{t('reviewView.fields.type')}</strong> {item.review_type} <br />
+										<strong>{t('reviewView.fields.target')}</strong> {displayData.target} <br />
+										<strong>{t('reviewView.fields.native')}</strong> {displayData.native} <br />
+										<strong>{t('reviewView.fields.category')}</strong> {displayData.category} <br />
+										<strong>{t('reviewView.fields.notes')}</strong> {displayData.notes} <br />
+										<strong>{t('reviewView.fields.example')}</strong> {displayData.example} <br />
+                                        <strong>{t('reviewView.fields.kanji')}</strong> {displayData.kanji} <br />
+                                        <strong>{t('reviewView.fields.kana')}</strong> {displayData.kana} <br />
+                                        <strong>{t('reviewView.fields.romanization')}</strong> {displayData.roman} <br />
+                                        <strong>{t('reviewView.fields.writingSystemNote')}</strong> {displayData.sysNote} <br />
+										{item.original_snippet && !displayData.notes?.startsWith('(Snippet:') && <><strong>{t('reviewView.fields.fullSnippet')}</strong> <pre className="review-snippet-pre" style={{ whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>{item.original_snippet}</pre></>}
+										{item.ai_suggestion && <><strong>{t('reviewView.fields.aiSuggestion')}</strong> {item.ai_suggestion} <br /></>}
+										<strong>{t('reviewView.fields.status')}</strong> {item.status} <br />
+										<small>{t('reviewView.fields.created')} {formatLocalDate(item.created_at)}</small>
 									</div>
-
-									{/* Column for the existing entry details (if duplicate) */}
 									{existingEntry && (
 										<div style={{ flex: 1, borderLeft: '2px solid #aaa', paddingLeft: '15px' }}>
-											<strong>Existing Entry (ID: {existingEntry.id})</strong><br />
-											<strong>Target:</strong> {existingEntry.target_text} <br />
-											<strong>Native:</strong> {existingEntry.native_text ?? 'N/A'} <br />
-											<strong>Category:</strong> {existingEntry.category ?? 'N/A'} <br />
-											<strong>Notes:</strong> {existingEntry.notes ?? 'N/A'} <br />
-											<strong>Example:</strong> {existingEntry.example_sentence ?? 'N/A'} <br />
-                                            <strong>Kanji/Character:</strong> {existingEntry.kanji_form ?? 'N/A'} <br />
-                                            <strong>Kana/Reading:</strong> {existingEntry.kana_form ?? 'N/A'} <br />
-                                            <strong>Romanization:</strong> {existingEntry.romanization ?? 'N/A'} <br />
-                                            <strong>Writing System Note:</strong> {existingEntry.writing_system_note ?? 'N/A'} <br />
-											<small>Added: {formatLocalDate(existingEntry.created_at)}</small><br />
-                      						<small>Updated: {formatLocalDate(existingEntry.updated_at)}</small>
+											<strong>{t('reviewView.existingEntryHeader', {id: existingEntry.id})}</strong><br />
+											<strong>{t('reviewView.fields.target')}</strong> {existingEntry.target_text} <br />
+											<strong>{t('reviewView.fields.native')}</strong> {existingEntry.native_text ?? 'N/A'} <br />
+											<strong>{t('reviewView.fields.category')}</strong> {existingEntry.category ?? 'N/A'} <br />
+											<strong>{t('reviewView.fields.notes')}</strong> {existingEntry.notes ?? 'N/A'} <br />
+											<strong>{t('reviewView.fields.example')}</strong> {existingEntry.example_sentence ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.kanji')}</strong> {existingEntry.kanji_form ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.kana')}</strong> {existingEntry.kana_form ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.romanization')}</strong> {existingEntry.romanization ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.writingSystemNote')}</strong> {existingEntry.writing_system_note ?? 'N/A'} <br />
+											<small>{t('reviewView.fields.added')} {formatLocalDate(existingEntry.created_at)}</small><br />
+                      						<small>{t('reviewView.fields.updated')} {formatLocalDate(existingEntry.updated_at)}</small>
 										</div>
 									)}
 								</div>
-								{/* Action buttons */}
 								<div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eee' }}>
 									<button
 										onClick={() => handleApprove(item)}
-										disabled={actionItemId === item.id || isClearing} // Disable if any item action or clear is in progress
+										disabled={actionItemId === item.id || isClearing}
 										style={{ marginRight: '10px', padding: '5px 10px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-										title={isEdited ? "Approve with edited data" : "Approve this item and add it to the Grammar Log (if not already present)"}
+										title={isEdited ? t('reviewView.tooltips.approveEdited') : t('reviewView.tooltips.approve')}
 									>
-										{/* Indicate if approving edited data */}
-										{(actionItemId === item.id && !isClearing) ? 'Approving...' : 'Approve'} {isEdited && '*'}
+										{(actionItemId === item.id && !isClearing) ? t('reviewView.approving') : t('buttons.approve')} {isEdited && '*'}
 									</button>
 									<button
 										onClick={() => handleDeleteItem(item.id)}
-										disabled={actionItemId === item.id || isClearing} // Disable if any item action or clear is in progress
+										disabled={actionItemId === item.id || isClearing}
 										style={{ marginRight: '10px', padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-										title="Permanently delete this review item"
+										title={t('reviewView.tooltips.delete')}
 									>
-										{(actionItemId === item.id && !isClearing) ? 'Deleting...' : 'Delete'}
+										{(actionItemId === item.id && !isClearing) ? t('reviewView.deleting') : t('buttons.delete')}
 									</button>
 									<button
 										onClick={() => handleEditClick(item)}
-										disabled={actionItemId === item.id || isClearing} // Enable button, disable if any item action or clear is in progress
+										disabled={actionItemId === item.id || isClearing}
 										style={{ padding: '5px 10px', border: '1px solid #ccc', borderRadius: '3px', cursor: 'pointer' }}
-										title="Edit this item before approving"
+										title={t('reviewView.tooltips.edit')}
 									>
-										Edit
+										{t('buttons.edit')}
 									</button>
 								</div>
 							</li>
@@ -427,16 +363,14 @@ const ReviewView: React.FC = () => {
 				</ul>
 			)}
 
-			{/* Edit Modal - Render only when isModalOpen is true and editingItem is set */}
 			{isModalOpen && editingItem && editedItemData && (
 				<Modal
 					isOpen={isModalOpen}
 					onClose={handleModalClose}
-					onSave={handleModalSave} // Saves data to editedItemData state
-					// Pass the current editedItemData state as initial data for the modal
+					onSave={handleModalSave}
 					initialData={editedItemData}
-					mode="edit" // Indicate we are editing
-					languageId={activeLanguageId ?? -1} // Pass language ID
+					mode="edit"
+					// languageId prop removed
 				/>
 			)}
 		</div>

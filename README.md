@@ -1,21 +1,26 @@
-# AI Grammar Log
+# Lingo
 
 ## Overview
 
-AI Grammar Log is an Electron-based desktop application designed for language learners. Its primary purpose is to provide a structured, searchable, and efficient way for users to create and manage logs of grammar points, vocabulary, phrases, and example sentences for the languages they are studying.
+Lingo is an Electron-based desktop application designed for language learners. Its primary purpose is to provide a structured, searchable, and efficient way for users to create and manage logs of grammar points, vocabulary, phrases, and example sentences for the languages they are studying.
 
 The core innovation is leveraging AI (specifically Google's Gemini models via user-provided API keys) to automatically parse and categorize entries from user-provided notes (supporting .txt, .md, and .docx files), aiming to significantly reduce manual data entry.
 
 ## Key Features
 
 *   **AI-Powered Note Parsing:** Automatically analyzes notes from .txt, .md, and .docx files to extract and categorize grammar points, vocabulary, and examples.
-*   **Multi-Language Support:** Designed to manage logs for various target languages.
-*   **Structured Log Entries:** Stores entries with fields for target text, native translation, category, notes, example sentences, and specific fields for character-based languages (e.g., Kanji, Kana, Romanization for Japanese).
-*   **Review System:** Flags ambiguous AI interpretations or potential duplicates for manual user review.
+*   **Customizable UI:** Defaults to dark mode. Supports light/dark themes and multiple interface languages (English, Japanese, French, German, Spanish, Portuguese, Russian - translations pending for non-English languages).
+*   **Intelligent Duplicate Handling:** When importing notes, if an AI-extracted item matches an existing log entry by its target text:
+    *   **Merging:** If the native translation is consistent, or if the existing entry's translation is empty, the system automatically attempts to merge additional new information (e.g., missing Kanji, Kana, notes, examples) into the existing entry. This enriches your log.
+    *   **Homonym Detection:** If the target text is the same but the AI proposes a *different native translation* than an already existing one, this potential homonym is flagged for user review to ensure distinct meanings are handled correctly.
+    *   Pure duplicates offering no new data (and not identified as potential homonyms) are automatically ignored, reducing clutter.
 *   **Manual Entry:** Allows users to add and edit log entries manually.
-*   **Search & Filter:** Provides capabilities to search and filter grammar log entries.
-*   **Customizable UI:** Supports light/dark themes and multiple interface languages (English, Japanese, French, German, Spanish, Portuguese, Russian - translations pending for non-English languages).
+*   **Multi-Language Support:** Designed to manage logs for various target languages.
+*   **Per-Language Data Isolation:** Each language's log is stored in a separate database file, improving data organization and allowing for complete log resets per language (by deleting the language's specific database file via the "Clear Log" function).
 *   **Processed Note History:** Keeps a record of imported source note files.
+*   **Refined Review System:** Focuses on content quality by flagging items needing attention. This includes potential homonym conflicts (same target word, different proposed translations), ambiguous AI interpretations (e.g., missing or unclear translations), content validation issues, or entries where the AI couldn't confidently categorize the data. (Note: Direct API processing errors are logged for debugging but generally do not create review items, keeping the review queue focused on content.)
+*   **Search & Filter:** Provides capabilities to search and filter grammar log entries.
+*   **Structured Log Entries:** Stores entries with fields for target text, native translation, category, notes, example sentences, and specific fields for character-based languages (e.g., Kanji, Kana, Romanization for Japanese).
 
 ## Technologies Used
 
@@ -23,8 +28,8 @@ The core innovation is leveraging AI (specifically Google's Gemini models via us
 *   **Frontend:** React with TypeScript (Vite)
 *   **Styling:** CSS (with dark mode support)
 *   **State Management:** React Context
-*   **AI Integration:** Google Gemini API (requires user's own API key)
-*   **Database:** SQLite3
+*   **AI Integration:** Google Gemini API (requires user's own API key). The application automatically retries API calls if transient issues occur, including a 30-second delay and retry specifically for API rate limit responses.
+*   **Database:** SQLite3 (per-language databases for logs; a global database for application settings)
 *   **Internationalization (i18n):** Custom implementation using JSON locale files.
 
 ## Getting Started
@@ -61,10 +66,11 @@ The core innovation is leveraging AI (specifically Google's Gemini models via us
 ### Configuration
 
 *   **Gemini API Key:** Upon first launch or via the Settings menu, you will need to enter your Google Gemini API Key for the AI parsing features to work.
+*   **Data Storage:** Language data is stored within the application's user data directory (the exact path is output to the terminal on startup). Inside a `languages` subfolder, each language has its own directory (e.g., `japanese`) containing its database file (e.g., `japanese.sqlite`). Global settings like your API key and theme preference are stored in a `global-settings.sqlite` file directly within the user data directory.
 
 ## Logging
 
-The application uses `electron-log` for backend logging. Log files (e.g., `main.log`) can typically be found in the user's application data directory (the exact path is output to the terminal on startup). These logs are crucial for debugging, especially AI responses.
+The application uses `electron-log` for backend logging. Log files (e.g., `main.log`) can typically be found in the user's application data directory (the exact path is output to the terminal on startup). These logs are crucial for debugging, especially AI responses and processing errors (including details on merged entries).
 
 ## Future Development Ideas
 
@@ -92,4 +98,4 @@ This project is licensed under the Mozilla Public License Version 2.0 (MPL 2.0).
 The full text of the license is also included in the `LICENSE` file in the root directory of this project.
 
 ---
-*Version: 1.0.0*
+*Version: 1.2.0 (As of May 14, 2025)*

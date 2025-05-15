@@ -1,5 +1,5 @@
 {
-  "appName": "AI Grammar Log",
+  "appName": "Lingo",
   "tabs": {
     "grammarLog": "Grammar Log",
     "sourceNotes": "Source Notes",
@@ -18,11 +18,10 @@
     "cancel": "Cancel",
     "addLanguage": "Add Language",
     "switchLanguage": "Switch Language",
-    "confirmDelete": "Yes, Delete All",
-    "toggleDarkMode": "Toggle Dark Mode"
+    "confirmDelete": "Yes, Delete All"
   },
   "welcomeScreen": {
-    "title": "Welcome to AI Grammar Log",
+    "title": "Welcome to Lingo",
     "instructions": "Please select or add a language to begin.",
     "selectLanguage": "Select Language:",
     "noLanguages": "No languages found. Add one below:",
@@ -30,7 +29,9 @@
     "languageName": "Name:",
     "languageNamePlaceholder": "e.g., Japanese",
     "nativeName": "Native Name:",
-    "nativeNamePlaceholder": "e.g., 日本語 (Optional)"
+    "nativeNamePlaceholder": "e.g., 日本語 (Optional)",
+    "addSuccess": "Language '{language}' created successfully!",
+    "addingLanguage": "Adding..."
   },
   "grammarLogView": {
     "searchLabel": "Search:",
@@ -63,9 +64,9 @@
       "sortByRomanization": "Sort by Romanization",
       "deleteEntry": "Delete Entry",
       "editEntry": "Edit Entry",
-      "clearLog": "Clear All Entries"
+      "clearLog": "Clear All Entries for {language}"
     },
-    "clearLogConfirm": "Are you sure you want to delete ALL entries for {language}? This cannot be undone.",
+    "clearLogConfirm": "Are you sure you want to delete the entire log file for {language}? This cannot be undone.",
     "noEntries": "No log entries found for this language. Click '+ Add Entry' or 'Clear Log' above.",
     "noEntriesMatch": "No log entries match the current search/filter criteria."
   },
@@ -77,7 +78,20 @@
     "processedHistory": "Processed Note History (Coming Soon)",
     "historyDescription": "A view of the successfully processed notes from imported files will appear here.",
     "batchComplete": "Batch processing complete. Processed {processedCount} of {totalCount} files. Total added: {added}. Total for review: {reviewed}.",
-    "batchCompleteWithError": "Batch processing complete with errors. Processed {processedCount} of {totalCount} files. Added: {added}. For review: {reviewed}. Errors: {errors}"
+    "batchCompleteWithError": "Batch processing complete with errors. Processed {processedCount} of {totalCount} files. Added: {added}. For review: {reviewed}. Errors: {errors}",
+    "importTooltip": "Select one or more .txt, .md, or .docx files to import",
+    "selecting": "Selecting...",
+    "processedHistoryTitle": "Processed Note History",
+    "noHistory": "No processed notes found for {language}, or history is loading.",
+    "historyFile": "File:",
+    "historySnippet": "Snippet:",
+    "historyProcessedOn": "Processed on:",
+    "historyLogEntryId": "Log Entry ID:",
+    "processingDefaultMessage": "Processing selected files...",
+    "selectFilesPrompt": "Select note file(s) (.txt, .md, .docx)...",
+    "batchFailed": "Batch processing failed with errors.",
+    "selectionCanceled": "File selection canceled.",
+    "processingCanceledUser": "Processing canceled by user (background tasks may still finish)."
   },
   "reviewView": {
     "title": "Review Pending Items ({language})",
@@ -165,7 +179,20 @@
       "deleteEntryNotFound": "Entry not found or could not be deleted.",
       "updateEntryNotFound": "Failed to update entry. It might have been deleted.",
       "apiKeySaveFailed": "Failed to save API key.",
-      "nativeLangSaveFailed": "Failed to save native language."
+      "nativeLangSaveFailed": "Failed to save native language.",
+      "languageNameEmpty": "Language name cannot be empty.",
+      "addLanguageFailed": "Failed to add language.",
+      "languageNotSelected": "Cannot perform action: No language selected.",
+      "languageNotSelectedImport": "Error: Cannot import notes without an active language.",
+      "noActiveLanguage": "No active language selected.",
+      "selectLanguageViewHistory": "Select a language to view its processed note history.",
+      "fetchHistoryFailed": "Failed to load processed notes history.",
+      "importUnknown": "An unknown error occurred during import.",
+      "saveFailed": "Failed to save entry.",
+      "selectLanguagePrompt": "Please select a language to review items.",
+      "loadTableError": "Error loading table:",
+      "clearLogErrorTitle": "Error clearing log:",
+      "deleteEntryErrorTitle": "Error deleting entry:"
   },
   "settingsPopup": {
     "title": "Settings",

@@ -64,8 +64,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
   const [locale, setLocaleState] = useState<Locale>('en');
   const [translations, setTranslations] = useState<LocaleData>(enTranslations);
   // Theme State
-  const [theme, setThemeState] = useState<Theme>('light'); // Default to light
-
+  const [theme, setThemeState] = useState<Theme>('dark'); // Default to dark
 
   // --- Locale Logic ---
   const setLocale = useCallback(async (newLocale: Locale) => {
@@ -149,12 +148,10 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
       setTheme(newTheme); // Calls setTheme which handles saving and applying
   }, [theme, setTheme]);
 
-
   // --- Translation Function ---
   const t = useCallback((key: string, replacements?: Record<string, string | number>) => {
     return translate(translations, key, replacements);
   }, [translations]);
-
 
   // --- Initial Load Logic ---
   useEffect(() => {
@@ -191,7 +188,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
         if (window.electronAPI) {
             try {
                 const savedTheme = await window.electronAPI.getSetting('uiTheme');
-                const validTheme = savedTheme && SUPPORTED_THEMES.includes(savedTheme as Theme) ? savedTheme as Theme : 'light'; // Default to light if invalid/missing
+                const validTheme = savedTheme && SUPPORTED_THEMES.includes(savedTheme as Theme) ? savedTheme as Theme : 'dark'; // Default to dark if invalid/missing
                 if (validTheme !== theme) {
                     setThemeState(validTheme); // Set state directly first
                     applyTheme(validTheme); // Apply theme class
@@ -201,7 +198,7 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
                 }
             } catch (error) {
                  console.error("Failed to load UI theme preference:", error);
-                 applyTheme('light'); // Fallback to light on error
+                 applyTheme('dark'); // Fallback to dark on error
             }
         } else {
             console.log("ElectronAPI not available on mount, applying default theme.");
@@ -213,7 +210,6 @@ export const UIProvider: React.FC<UIProviderProps> = ({ children }) => {
     loadThemePreference();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount, setLocale is memoized so it's safe here.
-
 
   const value = { locale, setLocale, t, theme, setTheme, toggleTheme };
 

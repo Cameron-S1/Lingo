@@ -1,61 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext'; // Import language hook
 import ProcessingModal from './ProcessingModal'; // Import the new modal
 import type { SourceNoteProcessed } from '../database'; // Import the type
+import { useUI } from '../contexts/UIContext'; // For translations
 
 type ProcessingStatus = 'idle' | 'selecting' | 'processing' | 'success' | 'error';
 
 const SourceNotesView: React.FC = () => {
-  const { activeLanguage } = useLanguage();
-  const [languageId, setLanguageId] = useState<number | null>(null);
+  const { selectedLanguageName } = useLanguage(); // Use selectedLanguageName
+  const { t } = useUI(); // For translations
+  // languageId state is removed
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [message, setMessage] = useState<string | null>(null); // For success/error messages
-  const [processingError, setProcessingError] = useState<string | null>(null); // Store processing errors
+  // processingError state seems redundant with message, let's use message for errors too.
   const [processedNotesHistory, setProcessedNotesHistory] = useState<SourceNoteProcessed[]>([]);
 
-  // Fetch language ID based on active language name
-  useEffect(() => {
-    const fetchLanguageId = async () => {
-      setLanguageId(null); // Reset on language change
-      setProcessedNotesHistory([]); // Clear history on language change
-      if (activeLanguage && window.electronAPI) {
-        try {
-          console.log(`SourceNotesView: Fetching ID for language: ${activeLanguage}`);
-          const id = await window.electronAPI.getLanguageIdByName(activeLanguage);
-          setLanguageId(id);
-           console.log(`SourceNotesView: Language ID for ${activeLanguage}: ${id}`);
-        } catch (err) {
-          console.error(`SourceNotesView: Error fetching language ID for ${activeLanguage}:`, err);
-          setProcessingError(`Failed to get ID for language: ${activeLanguage}`); // Show error in this view
-        }
-      }
-    };
-    fetchLanguageId();
-  }, [activeLanguage]);
+  // useEffect for fetching languageId is removed.
 
-  // Fetch processed notes history when languageId is available
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (languageId !== null && window.electronAPI) {
-        try {
-          console.log(`SourceNotesView: Fetching processed notes history for language ID: ${languageId}`);
-          const history = await window.electronAPI.getSourceNotesProcessed(languageId);
-          setProcessedNotesHistory(history);
-          console.log(`SourceNotesView: Fetched ${history.length} history items.`);
-        } catch (err) {
-          console.error('Error fetching processed notes history:', err);
-          setMessage('Failed to load processed notes history.');
-          // setStatus('error'); // Optionally set a general error status
-        }
+  // Fetch processed notes history when selectedLanguageName is available
+  const fetchHistory = useCallback(async () => {
+    setProcessedNotesHistory([]); // Clear history on language change or if no language
+    if (selectedLanguageName && window.electronAPI) {
+      try {
+        console.log(`SourceNotesView: Fetching processed notes history for language: ${selectedLanguageName}`);
+        // Pass selectedLanguageName
+        const history = await window.electronAPI.getSourceNotesProcessed(selectedLanguageName);
+        setProcessedNotesHistory(history);
+        console.log(`SourceNotesView: Fetched ${history.length} history items for ${selectedLanguageName}.`);
+      } catch (err) {
+        console.error(`Error fetching processed notes history for ${selectedLanguageName}:`, err);
+        setMessage(t('errors.fetchHistoryFailed', { default: 'Failed to load processed notes history.' }));
       }
-    };
+    }
+  }, [selectedLanguageName, t]); // Depend on selectedLanguageName and t
+
+  useEffect(() => {
     fetchHistory();
-  }, [languageId]);
+  }, [fetchHistory]); // fetchHistory is memoized with selectedLanguageName
 
 
   const handleImportClick = async () => {
-    if (!languageId) {
-      setMessage('Error: Cannot import notes without an active language ID.');
+    // Check selectedLanguageName
+    if (!selectedLanguageName) {
+      setMessage(t('errors.languageNotSelectedImport', { default: 'Error: Cannot import notes without an active language.'}));
       setStatus('error');
       return;
     }
@@ -66,109 +53,100 @@ const SourceNotesView: React.FC = () => {
     }
 
     setStatus('selecting');
-    setMessage('Select note file(s) (.txt, .md, .docx)...'); // Update message
-    setProcessingError(null); // Clear previous errors
-    let filePaths: string[] | null = null; // Store multiple paths
+    setMessage(t('sourceNotesView.selectFilesPrompt', { default: 'Select note file(s) (.txt, .md, .docx)...'}));
+    let filePaths: string[] | null = null;
 
     try {
-      filePaths = await window.electronAPI.showOpenDialog(); // Expecting array or null
+      filePaths = await window.electronAPI.showOpenDialog();
 
-      if (filePaths && filePaths.length > 0) { // Check if we got paths
+      if (filePaths && filePaths.length > 0) {
          setStatus('processing');
-         setMessage(`Processing ${filePaths.length} file(s)...`); // Update message for modal
-         console.log(`Starting processing for ${filePaths.length} files with LangID ${languageId}:`, filePaths);
+         setMessage(t('sourceNotesView.processingFiles', { count: filePaths.length, default: `Processing ${filePaths.length} file(s)...`}));
+         console.log(`Starting processing for ${filePaths.length} files for language ${selectedLanguageName}:`, filePaths);
 
-         // Call the function that handles multiple files (returns aggregated result)
-         const result = await window.electronAPI.processNoteFiles(filePaths, languageId);
+         // Call processNoteFiles with selectedLanguageName
+         const result = await window.electronAPI.processNoteFiles(selectedLanguageName, filePaths);
 
-         // Always update status based on the actual result from the backend
          if (result.success) {
            setStatus('success');
-           setMessage(result.message); // Display the aggregated result message
-           console.log('Batch processing successful:', result);
-           // Refresh history after successful processing
-           if (window.electronAPI) {
-             const history = await window.electronAPI.getSourceNotesProcessed(languageId);
-             setProcessedNotesHistory(history);
-           }
+           setMessage(result.message);
+           console.log(`Batch processing successful for ${selectedLanguageName}:`, result);
+           await fetchHistory(); // Refresh history after successful processing
          } else {
            setStatus('error');
-           setMessage(result.message || 'Batch processing failed with errors.'); // Use specific error message
-           console.error('Batch processing reported failure:', result);
+           setMessage(result.message || t('sourceNotesView.batchFailed', {default: 'Batch processing failed with errors.'}));
+           console.error(`Batch processing reported failure for ${selectedLanguageName}:`, result);
          }
-         // Message will now persist until next action or language change.
-
        } else {
-         // User canceled the dialog
          setStatus('idle');
-         setMessage('File selection canceled.');
+         setMessage(t('sourceNotesView.selectionCanceled', {default: 'File selection canceled.'}));
          console.log('File selection canceled by user.');
-          // Clear message after a few seconds
           setTimeout(() => setMessage(null), 3000);
        }
      } catch (err) {
-       console.error('Error during import process:', err);
-       // Only set error if not cancelled
+       console.error(`Error during import process for ${selectedLanguageName}:`, err);
         if (status === 'processing' || status === 'selecting') {
            setStatus('error');
-           setMessage(err instanceof Error ? `Error: ${err.message}` : 'An unknown error occurred during import.');
+           setMessage(err instanceof Error ? `Error: ${err.message}` : t('errors.importUnknown', {default: 'An unknown error occurred during import.'}));
         }
-        // Keep error message displayed until next action
      }
-      // Do not reset status to 'idle' immediately on error, let user see the message
    };
 
    const handleCancelProcessing = () => {
      console.log("User requested cancellation of processing UI.");
-     // Note: This only cancels the UI waiting state. Backend processing might continue.
      setStatus('idle');
-     setMessage('Processing canceled by user (background tasks may still finish).');
-      setTimeout(() => setMessage(null), 4000); // Clear message after a while
+     setMessage(t('sourceNotesView.processingCanceledUser', {default: 'Processing canceled by user (background tasks may still finish).'}));
+      setTimeout(() => setMessage(null), 4000);
    };
 
 
   return (
     <div>
-      <h2>Source Notes {activeLanguage ? `(${activeLanguage})` : ''}</h2>
-      <p>Import notes from supported files (.txt, .md, .docx) to populate your Grammar Log.</p>
+      {/* Display selectedLanguageName */}
+      <h2>{t('sourceNotesView.title', { language: selectedLanguageName || 'N/A' })}</h2>
+      <p>{t('sourceNotesView.importInstruction')}</p>
 
        <div style={{ margin: '20px 0' }}>
          <button
             onClick={handleImportClick}
-            disabled={status === 'processing' || status === 'selecting' || !languageId}
-            title="Select one or more .txt, .md, or .docx files to import" // Updated tooltip
+            // Disable based on selectedLanguageName
+            disabled={status === 'processing' || status === 'selecting' || !selectedLanguageName}
+            title={t('sourceNotesView.importTooltip', { default: "Select one or more .txt, .md, or .docx files to import"})}
             style={{ padding: '10px 15px', cursor: 'pointer' }}
           >
-           {status === 'selecting' ? 'Selecting...' : 'Import & Analyze Notes'}
+           {status === 'selecting' ? t('sourceNotesView.selecting', {default: 'Selecting...'}) : t('buttons.importAndAnalyze')}
          </button>
-         {(!languageId && !activeLanguage) && <p style={{ color: 'orange', marginTop: '5px' }}>No active language selected.</p>}
-         {/* Only show status messages when not showing the processing modal */}
+         {/* Check selectedLanguageName */}
+         {(!selectedLanguageName) && <p style={{ color: 'orange', marginTop: '5px' }}>{t('errors.noActiveLanguage', {default: 'No active language selected.'})}</p>}
          {message && status !== 'processing' && <p style={{ marginTop: '10px', color: status === 'error' ? 'red' : (status === 'success' ? 'green' : 'black') }}>{message}</p>}
        </div>
 
       {/* Display for processed notes history */}
       <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-        <h3>Processed Note History</h3>
-        {processedNotesHistory.length === 0 ? (
-          <p>No processed notes found for this language, or history is loading.</p>
+        <h3>{t('sourceNotesView.processedHistoryTitle', {default: 'Processed Note History'})}</h3>
+        {/* Show loading/empty state based on selectedLanguageName */}
+        {!selectedLanguageName ? (
+            <p>{t('errors.selectLanguageViewHistory', {default: "Select a language to view its processed note history."})}</p>
+        ) : processedNotesHistory.length === 0 ? (
+          <p>{t('sourceNotesView.noHistory', {language: selectedLanguageName, default: `No processed notes found for ${selectedLanguageName}, or history is loading.`})}</p>
         ) : (
           <ul style={{ listStyleType: 'none', paddingLeft: 0 }}>
             {processedNotesHistory.map(note => (
               <li key={note.id} className="processed-note-history-item" style={{ marginBottom: '15px' }}>
-                <div><strong>File:</strong> {note.source_file || 'N/A'}</div>
+                <div><strong>{t('sourceNotesView.historyFile', {default: 'File:'})}</strong> {note.source_file || 'N/A'}</div>
                 {note.original_snippet && (
                   <div style={{ marginTop: '5px' }}>
-                    <strong>Snippet:</strong>
+                    <strong>{t('sourceNotesView.historySnippet', {default: 'Snippet:'})}</strong>
                     <pre className="history-snippet-pre" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '100px', overflowY: 'auto' }}>
                       {note.original_snippet}
                     </pre>
                   </div>
                 )}
                 <div style={{ marginTop: '5px', fontSize: '0.9em', color: '#555' }}>
-                  <strong>Processed on:</strong> {new Date(note.created_at).toLocaleString()}
+                  <strong>{t('sourceNotesView.historyProcessedOn', {default: 'Processed on:'})}</strong> {new Date(note.created_at).toLocaleString()}
                 </div>
                 {note.log_entry_id && (
-                  <div style={{ fontSize: '0.9em', color: '#555' }}><strong>Log Entry ID:</strong> {note.log_entry_id}</div>
+                  <div style={{ fontSize: '0.9em', color: '#555' }}><strong>{t('sourceNotesView.historyLogEntryId', {default: 'Log Entry ID:'})}</strong> {note.log_entry_id}</div>
                 )}
               </li>
             ))}
@@ -179,7 +157,7 @@ const SourceNotesView: React.FC = () => {
       {/* Processing Modal */}
       <ProcessingModal
             isOpen={status === 'processing'}
-            message={message || 'Processing selected files...'} // Show specific or default message
+            message={message || t('sourceNotesView.processingDefaultMessage', {default: 'Processing selected files...'})}
             onCancel={handleCancelProcessing}
         />
     </div>

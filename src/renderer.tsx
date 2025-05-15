@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext'; // Import the language provider
 import { UIProvider } from './contexts/UIContext'; // Import the UI provider
-import type { Language } from './database'; // Import the Language type for the API definition
 import type { ElectronAPI } from './preload'; // Import the ElectronAPI interface shape
 
 // Define type for the exposed Electron API using the imported interface
@@ -53,7 +52,7 @@ async function testPing() {
 //       console.log('Testing getLanguages...');
 //       const languages = await window.electronAPI.getLanguages();
 //       console.log('Languages found:', languages);
-
+//
 //       // Add a test language if it doesn't exist
 //       const testLangName = 'TestLang';
 //       const existingId = await window.electronAPI.getLanguageIdByName(testLangName);
@@ -66,7 +65,7 @@ async function testPing() {
 //       } else {
 //          console.log(`${testLangName} already exists with ID: ${existingId}`);
 //       }
-
+//
 //     }
 //   } catch(error) {
 //     console.error('Error testing DB API:', error);

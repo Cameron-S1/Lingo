@@ -12,11 +12,12 @@ type Tab = 'log' | 'notes' | 'review' | 'settings';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('log'); // Default to 'log' tab when a language is active
-  const { activeLanguage, setActiveLanguage } = useLanguage(); // Get language and setter
+  // Use updated context state and functions
+  const { selectedLanguageName, selectLanguage } = useLanguage();
   const { t } = useUI(); // Get translation function
 
   const handleSwitchLanguage = () => {
-      setActiveLanguage(null); // Clear active language to return to WelcomeScreen
+      selectLanguage(null); // Clear selected language to return to WelcomeScreen
   };
 
   // Render main tabbed view
@@ -73,8 +74,8 @@ function App() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <nav style={navStyle}>
-          {/* Display active language */}
-          <span style={activeLangStyle}>Language: {activeLanguage}</span>
+          {/* Display selected language name */}
+          <span style={activeLangStyle}>Language: {selectedLanguageName}</span>
 
           {/* Tab Buttons - Use t() function */}
           <button style={tabButtonStyle('log')} onClick={() => setActiveTab('log')}>
@@ -102,8 +103,8 @@ function App() {
     );
   };
 
-  // Choose whether to show Welcome Screen or Main View
-  return activeLanguage ? renderMainView() : <WelcomeScreen />;
+  // Choose whether to show Welcome Screen or Main View based on selectedLanguageName
+  return selectedLanguageName ? renderMainView() : <WelcomeScreen />;
 }
 
 export default App;
