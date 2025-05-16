@@ -82,19 +82,19 @@ const ReviewView: React.FC = () => {
 		try {
 			if (!window.electronAPI) throw new Error('Electron API not available.');
 
-			let logData: LogEntryData; // No language_id here
+			let logData: LogEntryData; 
 			const wasJustEdited = editedItemData && editingItem?.id === item.id;
 
 			if (wasJustEdited) {
 				console.log(`Using edited data for approval of item ${item.id}`);
-				logData = { // No language_id
+				logData = { 
 					target_text: editedItemData.target_text ?? item.target_text ?? '',
 					native_text: editedItemData.native_text ?? null,
 					category: editedItemData.category ?? '',
 					notes: editedItemData.notes ?? null,
 					example_sentence: editedItemData.example_sentence ?? null,
-					kanji_form: editedItemData.kanji_form ?? null,
-					kana_form: editedItemData.kana_form ?? null,
+					character_form: editedItemData.character_form ?? null,
+					reading_form: editedItemData.reading_form ?? null,
 					romanization: editedItemData.romanization ?? null,
 					writing_system_note: editedItemData.writing_system_note ?? null,
 				};
@@ -102,14 +102,14 @@ const ReviewView: React.FC = () => {
 			} else {
 				console.log(`Using original review item data for approval of item ${item.id}`);
                 const relatedEntryForFallback = (item.review_type === 'duplicate' && item.related_log_entry_id) ? relatedLogEntries.get(item.related_log_entry_id) : null;
-				logData = { // No language_id
+				logData = { 
 					target_text: item.target_text ?? '',
 					native_text: item.native_text ?? (relatedEntryForFallback?.native_text ?? null),
                     category: item.category_guess ?? (relatedEntryForFallback?.category ?? 'Other'),
 					notes: (item.original_snippet && item.original_snippet !== item.target_text ? item.original_snippet : undefined) ?? (relatedEntryForFallback?.notes ?? null),
 					example_sentence: relatedEntryForFallback?.example_sentence ?? null,
-					kanji_form: item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? null),
-					kana_form: item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? null),
+					character_form: item.ai_extracted_character_form ?? (relatedEntryForFallback?.character_form ?? null),
+					reading_form: item.ai_extracted_reading_form ?? (relatedEntryForFallback?.reading_form ?? null),
 					romanization: item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? null),
 					writing_system_note: item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? null),
 				};
@@ -218,8 +218,8 @@ const ReviewView: React.FC = () => {
             category: (item.category_guess ?? (relatedEntryForFallback?.category ?? undefined)) || '',
             notes: ((item.original_snippet && item.original_snippet !== item.target_text ? item.original_snippet : undefined) ?? (relatedEntryForFallback?.notes ?? undefined)) || '',
             example_sentence: relatedEntryForFallback?.example_sentence || '',
-            kanji_form: (item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? undefined)) || '',
-            kana_form: (item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? undefined)) || '',
+            character_form: (item.ai_extracted_character_form ?? (relatedEntryForFallback?.character_form ?? undefined)) || '',
+            reading_form: (item.ai_extracted_reading_form ?? (relatedEntryForFallback?.reading_form ?? undefined)) || '',
             romanization: (item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? undefined)) || '',
             writing_system_note: (item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? undefined)) || '',
         };
@@ -269,8 +269,8 @@ const ReviewView: React.FC = () => {
                                 category: editedItemData.category ?? item.category_guess ?? 'N/A',
                                 notes: editedItemData.notes ?? item.original_snippet ?? 'N/A',
                                 example: editedItemData.example_sentence ?? 'N/A',
-                                kanji: editedItemData.kanji_form ?? item.ai_extracted_kanji_form ?? 'N/A',
-                                kana: editedItemData.kana_form ?? item.ai_extracted_kana_form ?? 'N/A',
+                                character_form: editedItemData.character_form ?? item.ai_extracted_character_form ?? 'N/A', // Changed kanji
+                                reading_form: editedItemData.reading_form ?? item.ai_extracted_reading_form ?? 'N/A', // Changed kana
                                 roman: editedItemData.romanization ?? item.ai_extracted_romanization ?? 'N/A',
                                 sysNote: editedItemData.writing_system_note ?? item.ai_extracted_writing_system_note ?? 'N/A'
                             };
@@ -280,10 +280,10 @@ const ReviewView: React.FC = () => {
                                 target: item.target_text ?? 'N/A',
                                 native: item.native_text ?? 'N/A',
                                 category: item.category_guess ?? (relatedEntryForFallback?.category ?? 'N/A'),
-                                notes: (item.original_snippet && item.original_snippet !== item.target_text ? `(Snippet: ${item.original_snippet.substring(0, 50)}...)` : (relatedEntryForFallback?.notes ?? 'N/A')),
+                                notes: ((item.original_snippet && item.original_snippet !== item.target_text ? `(Snippet: ${item.original_snippet.substring(0, 50)}...)` : (relatedEntryForFallback?.notes ?? 'N/A'))),
                                 example: relatedEntryForFallback?.example_sentence ?? 'N/A',
-                                kanji: item.ai_extracted_kanji_form ?? (relatedEntryForFallback?.kanji_form ?? 'N/A'),
-                                kana: item.ai_extracted_kana_form ?? (relatedEntryForFallback?.kana_form ?? 'N/A'),
+                                character_form: item.ai_extracted_character_form ?? (relatedEntryForFallback?.character_form ?? 'N/A'), // Changed kanji
+                                reading_form: item.ai_extracted_reading_form ?? (relatedEntryForFallback?.reading_form ?? 'N/A'), // Changed kana
                                 roman: item.ai_extracted_romanization ?? (relatedEntryForFallback?.romanization ?? 'N/A'),
                                 sysNote: item.ai_extracted_writing_system_note ?? (relatedEntryForFallback?.writing_system_note ?? 'N/A')
                             };
@@ -305,8 +305,8 @@ const ReviewView: React.FC = () => {
 										<strong>{t('reviewView.fields.category')}</strong> {displayData.category} <br />
 										<strong>{t('reviewView.fields.notes')}</strong> {displayData.notes} <br />
 										<strong>{t('reviewView.fields.example')}</strong> {displayData.example} <br />
-                                        <strong>{t('reviewView.fields.kanji')}</strong> {displayData.kanji} <br />
-                                        <strong>{t('reviewView.fields.kana')}</strong> {displayData.kana} <br />
+                                        <strong>{t('reviewView.fields.kanji')}</strong> {displayData.character_form} <br />
+                                        <strong>{t('reviewView.fields.kana')}</strong> {displayData.reading_form} <br />
                                         <strong>{t('reviewView.fields.romanization')}</strong> {displayData.roman} <br />
                                         <strong>{t('reviewView.fields.writingSystemNote')}</strong> {displayData.sysNote} <br />
 										{item.original_snippet && !displayData.notes?.startsWith('(Snippet:') && <><strong>{t('reviewView.fields.fullSnippet')}</strong> <pre className="review-snippet-pre" style={{ whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>{item.original_snippet}</pre></>}
@@ -322,8 +322,8 @@ const ReviewView: React.FC = () => {
 											<strong>{t('reviewView.fields.category')}</strong> {existingEntry.category ?? 'N/A'} <br />
 											<strong>{t('reviewView.fields.notes')}</strong> {existingEntry.notes ?? 'N/A'} <br />
 											<strong>{t('reviewView.fields.example')}</strong> {existingEntry.example_sentence ?? 'N/A'} <br />
-                                            <strong>{t('reviewView.fields.kanji')}</strong> {existingEntry.kanji_form ?? 'N/A'} <br />
-                                            <strong>{t('reviewView.fields.kana')}</strong> {existingEntry.kana_form ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.kanji')}</strong> {existingEntry.character_form ?? 'N/A'} <br />
+                                            <strong>{t('reviewView.fields.kana')}</strong> {existingEntry.reading_form ?? 'N/A'} <br />
                                             <strong>{t('reviewView.fields.romanization')}</strong> {existingEntry.romanization ?? 'N/A'} <br />
                                             <strong>{t('reviewView.fields.writingSystemNote')}</strong> {existingEntry.writing_system_note ?? 'N/A'} <br />
 											<small>{t('reviewView.fields.added')} {formatLocalDate(existingEntry.created_at)}</small><br />

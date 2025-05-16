@@ -20,7 +20,7 @@ import {
   type ReviewType,
   type ReviewStatus,
   type ReviewItemData,
-  type ScriptAnnotationDetail, // Import the new type if needed here, or assume ExtractedItem aligns
+  type ScriptAnnotationDetail, 
   addLogEntry,
   findLogEntryByTarget,
   getLogEntries,
@@ -50,9 +50,23 @@ console.log(`Logging initialized. Log file at: ${log.transports.file.getFile().p
 let mainWindow: BrowserWindow | null = null;
 
 const createWindow = () => {
+  // Determine the icon path correctly for both dev and prod
+  // Assumes logo.ico is now in the 'src' directory
+  const iconPath = app.isPackaged 
+    ? path.join(process.resourcesPath, 'src', 'logo.ico') // If electron-builder copies src/logo.ico into resources/src
+    : path.join(app.getAppPath(), 'src', 'logo.ico'); 
+
+  // A more robust check if electron-builder flattens the icon into resources:
+  // const iconPath = app.isPackaged 
+  //   ? path.join(process.resourcesPath, 'logo.ico') 
+  //   : path.join(app.getAppPath(), 'src', 'logo.ico'); 
+  // This relies on 'src/logo.ico' being copied as 'logo.ico' to the resources dir by electron-builder due to package.json setting.
+
+
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
+    icon: iconPath, 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -138,7 +152,6 @@ app.whenReady().then(() => {
      try {
        if (!languageName || !data || typeof data !== 'object') { throw new Error('Invalid language name or log entry data provided.'); }
        
-       // Auto-populate target_text if empty (Task 1.4)
        if (!data.target_text?.trim()) {
            data.target_text = data.character_form?.trim() || 
                               data.reading_form?.trim() || 
@@ -146,11 +159,9 @@ app.whenReady().then(() => {
                               ''; 
            if (!data.target_text) {
                log.warn(`target_text could not be auto-populated for new entry in ${languageName} as character_form, reading_form, and romanization are all empty. Data:`, data);
-               // Depending on strictness, could throw an error here if target_text is mandatory
-               // For now, allow it to proceed; database might have NOT NULL constraint if it's critical
            }
        }
-       if (!data.target_text && !data.character_form && !data.reading_form && !data.romanization) { // Stricter check
+       if (!data.target_text && !data.character_form && !data.reading_form && !data.romanization) { 
           throw new Error('Cannot add log entry: Target text, character form, reading form, and romanization are all empty.');
        }
 
@@ -184,19 +195,14 @@ app.whenReady().then(() => {
      try {
        if (!languageName || id == null || typeof updates !== 'object' || Object.keys(updates).length === 0) { throw new Error('Invalid arguments for updateLogEntry.'); }
        
-       // Simplified target_text auto-population for updates (Task 1.4)
-       // If target_text is explicitly being set to empty in the updates payload
        if (updates.target_text !== undefined && updates.target_text.trim() === '') {
-           const charForm = updates.character_form ?? ''; // Check updates first
+           const charForm = updates.character_form ?? ''; 
            const readForm = updates.reading_form ?? '';
            const romanForm = updates.romanization ?? '';
 
            updates.target_text = charForm.trim() || readForm.trim() || romanForm.trim() || '';
            if (!updates.target_text) {
                log.warn(`Update for entry ID ${id} in ${languageName} attempts to set target_text to empty, and auto-population from other updated fields also resulted in empty.`);
-               // Consider fetching existing record to populate from non-updated fields if this behavior is desired.
-               // For now, if all sources in `updates` are empty, target_text becomes empty.
-               // This might be an issue if the intent was to clear target_text but other forms still exist on the DB record.
            }
        }
 
@@ -270,10 +276,6 @@ app.whenReady().then(() => {
        let itemsForReview = 0;
        let entriesUpdated = 0; 
 
-       // Assuming ExtractedItem from geminiClient now provides fields like:
-       // character_form, reading_form, script_annotations, romanization, etc.
-       // and script_annotations is ScriptAnnotationDetail[] | null
-
        try {
            const fileExtension = path.extname(filePath).toLowerCase();
            if (fileExtension === '.docx') {
@@ -306,8 +308,8 @@ app.whenReady().then(() => {
                 return { added: 0, reviewed: itemsForReview, updated: 0, fileName, skippedDueToRateLimit: true };
            } else if (analysisResult.extractedItems && analysisResult.extractedItems.length > 0) {
                log.info(`AI analysis for ${fileName} returned ${analysisResult.extractedItems.length} items.`);
-               for (const item of analysisResult.extractedItems) { // item is ExtractedItem
-                   let currentTargetText = item.target_text; // Assuming item provides target_text
+               for (const item of analysisResult.extractedItems) { 
+                   let currentTargetText = item.target_text; 
                    if (!currentTargetText?.trim()) {
                        currentTargetText = item.character_form?.trim() || 
                                          item.reading_form?.trim() || 
@@ -345,8 +347,8 @@ app.whenReady().then(() => {
                                    ai_suggestion: `Potential homonym: Existing entry (ID: ${existing.id}) for "${currentTargetText}" has native text: "${existing.native_text}". AI proposed a different native text: "${item.native_text}". Please review.`,
                                    original_snippet: item.original_snippet || currentTargetText.substring(0,500),
                                    related_log_entry_id: existing.id,
-                                   ai_extracted_character_form: item.character_form, // New field name
-                                   ai_extracted_reading_form: item.reading_form,   // New field name
+                                   ai_extracted_character_form: item.character_form, 
+                                   ai_extracted_reading_form: item.reading_form,   
                                    ai_extracted_romanization: item.romanization,
                                    category_guess: item.category_guess,
                                    source_note_processed_id: sourceNoteId
@@ -385,19 +387,19 @@ app.whenReady().then(() => {
                            }
                        } else { 
                            const entryData: LogEntryData = {
-                                target_text: currentTargetText, // Already determined
+                                target_text: currentTargetText, 
                                 native_text: item.native_text ?? null,
                                 category: item.category_guess ?? 'Other',
                                 notes: item.notes ?? null,
                                 example_sentence: item.example_sentence ?? null,
-                                character_form: item.character_form ?? null, // New field name
-                                reading_form: item.reading_form ?? null,   // New field name
+                                character_form: item.character_form ?? null, 
+                                reading_form: item.reading_form ?? null,   
                                 romanization: item.romanization ?? null,
                                 writing_system_note: item.writing_system_note ?? null,
-                                script_annotations: item.script_annotations ?? null // New field name
+                                script_annotations: item.script_annotations ?? null 
                             };
                            try {
-                               await addLogEntry(languageName, entryData); // addLogEntry itself will handle final target_text if still needed
+                               await addLogEntry(languageName, entryData); 
                                entriesAdded++;
                            } catch (addErr: any) { 
                                log.error(`Error adding new log entry for ${fileName} (target: ${currentTargetText}), creating review item:`, addErr);
@@ -405,7 +407,7 @@ app.whenReady().then(() => {
                                     review_type: 'parsing_assist',
                                     target_text: currentTargetText, native_text: item.native_text,
                                     original_snippet: item.original_snippet ?? currentTargetText.substring(0,500),
-                                    ai_suggestion: `Failed to add entry: ${addErr.message}. AI data: cat='${item.category_guess}', charForm='${item.character_form}'`, // Updated field name
+                                    ai_suggestion: `Failed to add entry: ${addErr.message}. AI data: cat='${item.category_guess}', charForm='${item.character_form}'`, 
                                     source_note_processed_id: sourceNoteId
                                 };
                                await addReviewItem(languageName, reviewData); itemsForReview++;
