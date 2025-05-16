@@ -18,24 +18,26 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { useLanguage } from '../contexts/LanguageContext';
-import type { LogEntry, LogEntryData, GetLogEntriesOptions, ScriptAnnotationDetail } from '../database'; // Updated FuriganaDetail to ScriptAnnotationDetail
+import type { LogEntry, LogEntryData, GetLogEntriesOptions, ScriptAnnotationDetail } from '../database';
 import Modal from './Modal';
 import { GRAMMAR_CATEGORIES } from '../constants';
 import { useUI } from '../contexts/UIContext';
+import ColumnSettingsPopover from './ColumnSettingsPopover'; 
+// Using a Unicode character for the settings icon instead of an external library for now.
 
-type DataSortableColumnKey = NonNullable<GetLogEntriesOptions['sortBy']>;
-
-interface ColumnConfig {
-  id: string; // Will match new field names like 'character_form'
+export interface ColumnConfig { 
+  id: string;
   headerKey: string; 
   tooltipKey: string; 
   dataSortKey?: DataSortableColumnKey;
   isDraggable: boolean;
+  defaultVisible: boolean; 
   minWidth?: string;
   className?: string; 
 }
 
-// Helper to check for Kanji characters (simplified range) - may need to be generalized later
+type DataSortableColumnKey = NonNullable<GetLogEntriesOptions['sortBy']>;
+
 const isKanji = (char: string): boolean => {
   if (!char || char.length !== 1) return false;
   const charCode = char.charCodeAt(0);
@@ -44,7 +46,6 @@ const isKanji = (char: string): boolean => {
          (charCode >= 0xF900 && charCode <= 0xFAFF);   
 };
 
-// Renamed from RenderWithFurigana
 const RenderWithAnnotations: React.FC<{ text: string | null | undefined, scriptAnnotations?: ScriptAnnotationDetail[] | null, theme: string }> = ({ text, scriptAnnotations, theme }) => {
   if (!text) return <>{''}</>;
   if (!scriptAnnotations || scriptAnnotations.length === 0) {
@@ -73,17 +74,15 @@ const RenderWithAnnotations: React.FC<{ text: string | null | undefined, scriptA
   };
 
   const elements: React.ReactNode[] = [];
-  const annotationMap = new Map<string, string>(); // Maps base_character to annotation_text
+  const annotationMap = new Map<string, string>();
   if(scriptAnnotations){
       scriptAnnotations.forEach(detail => {
-        // Assuming detail.type === 'reading' for now, as per AI prompt
         annotationMap.set(detail.base_character, detail.annotation_text);
       });
   }
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    // The isKanji check could be made more generic based on language or annotation type in the future
     if (isKanji(char) && annotationMap.has(char)) { 
       elements.push(
         <ruby key={`ruby-${char}-${i}`} className="ruby-hover-wrapper" style={rubyWrapperStyle}>
@@ -128,13 +127,12 @@ const SortableHeaderCell: React.FC<SortableHeaderCellProps> = ({ config, onSortC
   };
 
   const handleHeaderClick = () => { if (config.dataSortKey && onSortClick) onSortClick(config.dataSortKey); };
-  // TODO: Use getFieldDisplayName from UIContext for config.headerKey for language-specific aliases
   return <th ref={setNodeRef} style={style} className={config.className} {...(config.isDraggable ? attributes : {})} {...(config.isDraggable ? listeners : {})} onClick={handleHeaderClick} title={t(config.tooltipKey)}>{t(config.headerKey)}{config.dataSortKey && getSortIndicator(config.dataSortKey)}</th>;
 };
 
 const GrammarLogView: React.FC = () => {
   const { selectedLanguageName, selectLanguage } = useLanguage();
-  const { t, theme } = useUI(); // TODO: Later, get getFieldDisplayName from useUI
+  const { t, theme } = useUI();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,46 +151,37 @@ const GrammarLogView: React.FC = () => {
 	const [isConfirmingClear, setIsConfirmingClear] = useState<boolean>(false);
 	const [isClearing, setIsClearing] = useState<boolean>(false);
 	const [clearError, setClearError] = useState<string | null>(null);
+  const [columnSettingsAnchorEl, setColumnSettingsAnchorEl] = useState<null | HTMLElement>(null);
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+
 
   const ALL_COLUMN_CONFIGS: ColumnConfig[] = React.useMemo(() => [ 
-    { id: 'id', headerKey: 'grammarLogView.headers.id', tooltipKey: 'grammarLogView.tooltips.sortById', dataSortKey: 'id', isDraggable: false, minWidth: '50px', className: 'col-id' },
-    { id: 'target_text', headerKey: 'grammarLogView.headers.target', tooltipKey: 'grammarLogView.tooltips.sortByTarget', dataSortKey: 'target_text', isDraggable: true, className: 'col-target-text' },
-    { id: 'native_text', headerKey: 'grammarLogView.headers.native', tooltipKey: 'grammarLogView.tooltips.sortByNative', dataSortKey: 'native_text', isDraggable: true, className: 'col-native-text' },
-    { id: 'category', headerKey: 'grammarLogView.headers.category', tooltipKey: 'grammarLogView.tooltips.sortByCategory', dataSortKey: 'category', isDraggable: true, className: 'col-category' },
-    { id: 'character_form', headerKey: 'grammarLogView.headers.character_form', tooltipKey: 'grammarLogView.tooltips.sortByCharacterForm', dataSortKey: 'character_form', isDraggable: true, className: 'col-character-form' }, // Updated
-    { id: 'reading_form', headerKey: 'grammarLogView.headers.reading_form', tooltipKey: 'grammarLogView.tooltips.sortByReadingForm', dataSortKey: 'reading_form', isDraggable: true, className: 'col-reading-form' }, // Updated
-    { id: 'romanization', headerKey: 'grammarLogView.headers.romanization', tooltipKey: 'grammarLogView.tooltips.sortByRomanization', dataSortKey: 'romanization', isDraggable: true, className: 'col-romanization' },
-    { id: 'notes', headerKey: 'grammarLogView.headers.notes', tooltipKey: 'grammarLogView.tooltips.viewNotes', isDraggable: true, className: 'col-notes' }, // No dataSortKey for notes
-    { id: 'actions', headerKey: 'grammarLogView.headers.actions', tooltipKey: 'grammarLogView.tooltips.actions', isDraggable: false, minWidth: '100px', className: 'col-actions' },
-  ], [t]); // t dependency remains for now for tooltip strings
+    { id: 'id', headerKey: 'grammarLogView.headers.id', tooltipKey: 'grammarLogView.tooltips.sortById', dataSortKey: 'id', isDraggable: false, defaultVisible: true, minWidth: '50px', className: 'col-id' },
+    { id: 'target_text', headerKey: 'grammarLogView.headers.target', tooltipKey: 'grammarLogView.tooltips.sortByTarget', dataSortKey: 'target_text', isDraggable: true, defaultVisible: false, className: 'col-target-text' }, // Changed defaultVisible to false
+    { id: 'native_text', headerKey: 'grammarLogView.headers.native', tooltipKey: 'grammarLogView.tooltips.sortByNative', dataSortKey: 'native_text', isDraggable: true, defaultVisible: true, className: 'col-native-text' },
+    { id: 'category', headerKey: 'grammarLogView.headers.category', tooltipKey: 'grammarLogView.tooltips.sortByCategory', dataSortKey: 'category', isDraggable: true, defaultVisible: true, className: 'col-category' },
+    { id: 'character_form', headerKey: 'grammarLogView.headers.character_form', tooltipKey: 'grammarLogView.tooltips.sortByCharacterForm', dataSortKey: 'character_form', isDraggable: true, defaultVisible: true, className: 'col-character-form' },
+    { id: 'reading_form', headerKey: 'grammarLogView.headers.reading_form', tooltipKey: 'grammarLogView.tooltips.sortByReadingForm', dataSortKey: 'reading_form', isDraggable: true, defaultVisible: true, className: 'col-reading-form' },
+    { id: 'romanization', headerKey: 'grammarLogView.headers.romanization', tooltipKey: 'grammarLogView.tooltips.sortByRomanization', dataSortKey: 'romanization', isDraggable: true, defaultVisible: true, className: 'col-romanization' },
+    { id: 'notes', headerKey: 'grammarLogView.headers.notes', tooltipKey: 'grammarLogView.tooltips.viewNotes', isDraggable: true, defaultVisible: true, className: 'col-notes' },
+    { id: 'actions', headerKey: 'grammarLogView.headers.actions', tooltipKey: 'grammarLogView.tooltips.actions', isDraggable: false, defaultVisible: true, minWidth: '100px', className: 'col-actions' },
+  ], []); 
 
-  const DEFAULT_DRAGGABLE_COLUMN_IDS = ['character_form', 'reading_form', 'romanization', 'native_text', 'category', 'notes']; // Updated
+  const DEFAULT_DRAGGABLE_COLUMN_IDS = ALL_COLUMN_CONFIGS.filter(c => c.isDraggable).map(c => c.id);
   const [orderedDraggableColumnIds, setOrderedDraggableColumnIds] = useState<string[]>(DEFAULT_DRAGGABLE_COLUMN_IDS);
-  const fixedLeftColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'id'); // target_text is now draggable
+  
+  const fixedLeftColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'id');
   const fixedRightColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'actions');
 
-  const currentDisplayColumnConfigs = React.useMemo(() => { 
-      // TODO: Later, filter draggableConfigsInOrder based on isFieldVisible from UIContext for reading_form
-      const draggableConfigsInOrder = orderedDraggableColumnIds
-        .map(id => ALL_COLUMN_CONFIGS.find(c => c.id === id && c.isDraggable))
-        .filter(Boolean) as ColumnConfig[];
-      return [...fixedLeftColumnConfigs, ...draggableConfigsInOrder, ...fixedRightColumnConfigs];
-  }, [orderedDraggableColumnIds, fixedLeftColumnConfigs, fixedRightColumnConfigs, ALL_COLUMN_CONFIGS]);
-
-  const sensors = useSensors( 
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
   useEffect(() => { 
-    if (selectedLanguageName && window.electronAPI?.getLanguageUISetting) {
+    if (selectedLanguageName && window.electronAPI) {
       window.electronAPI.getLanguageUISetting(selectedLanguageName, 'grammar_log_column_order')
         .then((savedOrderJson: string | null) => {
           if (savedOrderJson) {
             try {
               const savedOrder = JSON.parse(savedOrderJson) as string[];
               const validDraggableIds = ALL_COLUMN_CONFIGS.filter(c => c.isDraggable).map(c => c.id);
-              const filteredSavedOrder = savedOrder.filter((id: string) => validDraggableIds.includes(id));
+              const filteredSavedOrder = savedOrder.filter(id => validDraggableIds.includes(id));
               const defaultDraggableSet = new Set(DEFAULT_DRAGGABLE_COLUMN_IDS);
               const finalOrder = [...new Set([...filteredSavedOrder, ...DEFAULT_DRAGGABLE_COLUMN_IDS])]
                                     .filter(id => validDraggableIds.includes(id) || defaultDraggableSet.has(id));                
@@ -203,12 +192,63 @@ const GrammarLogView: React.FC = () => {
             }
           } else { setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); }
         })
-        .catch((err: Error) => { 
+        .catch(err => { 
             console.error("Error loading column order:", err);
             setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); 
         });
-    } else { setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); }
-  }, [selectedLanguageName, ALL_COLUMN_CONFIGS]); // ALL_COLUMN_CONFIGS dependency is important
+
+      window.electronAPI.getLanguageUISetting(selectedLanguageName, 'grammar_log_column_visibility')
+        .then((savedVisibilityJson: string | null) => {
+          const initialVisibility: Record<string, boolean> = {};
+          ALL_COLUMN_CONFIGS.forEach(col => {
+            initialVisibility[col.id] = col.defaultVisible;
+          });
+          if (savedVisibilityJson) {
+            try {
+              const savedVisibility = JSON.parse(savedVisibilityJson) as Record<string, boolean>;
+              for (const colId in savedVisibility) {
+                if (initialVisibility.hasOwnProperty(colId)) {
+                  initialVisibility[colId] = savedVisibility[colId];
+                }
+              }
+            } catch (e) {
+              console.error("Error parsing saved column visibility:", e);
+            }
+          }
+          setColumnVisibility(initialVisibility);
+        })
+        .catch(err => {
+          console.error("Error loading column visibility:", err);
+          const defaultVisibility: Record<string, boolean> = {};
+          ALL_COLUMN_CONFIGS.forEach(col => defaultVisibility[col.id] = col.defaultVisible);
+          setColumnVisibility(defaultVisibility);
+        });
+    } else { 
+      setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); 
+      const defaultVisibility: Record<string, boolean> = {};
+      ALL_COLUMN_CONFIGS.forEach(col => defaultVisibility[col.id] = col.defaultVisible);
+      setColumnVisibility(defaultVisibility);
+    }
+  }, [selectedLanguageName, ALL_COLUMN_CONFIGS]); // ALL_COLUMN_CONFIGS added as dependency
+
+  const currentDisplayColumnConfigs = React.useMemo(() => { 
+      const draggableConfigsInOrder = orderedDraggableColumnIds
+        .map(id => ALL_COLUMN_CONFIGS.find(c => c.id === id && c.isDraggable))
+        .filter(Boolean) as ColumnConfig[];
+      
+      const visibleDraggable = draggableConfigsInOrder.filter(col => columnVisibility[col.id] !== false); 
+      
+      return [
+          ...fixedLeftColumnConfigs.filter(col => columnVisibility[col.id] !== false), 
+          ...visibleDraggable, 
+          ...fixedRightColumnConfigs.filter(col => columnVisibility[col.id] !== false)
+        ];
+  }, [orderedDraggableColumnIds, fixedLeftColumnConfigs, fixedRightColumnConfigs, ALL_COLUMN_CONFIGS, columnVisibility]);
+
+  const sensors = useSensors( 
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const handleDragEnd = (event: DragEndEvent) => { 
     const { active, over } = event;
@@ -264,8 +304,8 @@ const GrammarLogView: React.FC = () => {
 	const handleModalSave = async (formDataFromModal: Partial<LogEntryData>) => { 
  		setIsSubmittingEntry(true);
  		setModalError(null);
-		if (!formDataFromModal.target_text?.trim() && !formDataFromModal.character_form?.trim()) { // Updated
-			setModalError(t('modal.validation.targetOrCharacterEmpty', { default: "Target text or Character form cannot both be empty."})); // Key updated
+		if (!formDataFromModal.target_text?.trim() && !formDataFromModal.character_form?.trim()) {
+			setModalError(t('modal.validation.targetOrCharacterEmpty', { default: "Target text or Character form cannot both be empty."}));
 			setIsSubmittingEntry(false);
 			return;
 		}
@@ -274,19 +314,17 @@ const GrammarLogView: React.FC = () => {
 			setIsSubmittingEntry(false);
 			return;
 		}
-		// Target text population logic is now primarily handled in main.ts (IPC handler)
-    // Frontend can still set it, but main.ts will enforce the fallback if empty.
     const payload: LogEntryData = {
-			target_text: formDataFromModal.target_text || '', // Ensure it's a string
+			target_text: formDataFromModal.target_text || '', 
 			native_text: formDataFromModal.native_text?.trim() || null,
 			category: formDataFromModal.category?.trim() || null,
 			notes: formDataFromModal.notes?.trim() || null,
 			example_sentence: formDataFromModal.example_sentence?.trim() || null,
-			character_form: formDataFromModal.character_form?.trim() || null, // Updated
-			reading_form: formDataFromModal.reading_form?.trim() || null,   // Updated
+			character_form: formDataFromModal.character_form?.trim() || null,
+			reading_form: formDataFromModal.reading_form?.trim() || null,
 			romanization: formDataFromModal.romanization?.trim() || null,
 			writing_system_note: formDataFromModal.writing_system_note?.trim() || null,
-      script_annotations: formDataFromModal.script_annotations || null, // Updated
+      script_annotations: formDataFromModal.script_annotations || null,
  		};
  		try {
  			if (!window.electronAPI) throw new Error('Electron API not available.');
@@ -294,7 +332,6 @@ const GrammarLogView: React.FC = () => {
  				const success = await window.electronAPI.updateLogEntry(selectedLanguageName, editingEntry.id, payload);
  				if (!success) throw new Error(t('errors.updateEntryNotFound', { default: 'Failed to update entry. It might have been deleted.'}));
  			} else {
-        // findLogEntryByTarget should still work with target_text from payload
  				 const existingEntry = await window.electronAPI.findLogEntryByTarget(selectedLanguageName, payload.target_text);
  				 if (existingEntry) throw new Error(t('errors.addLogEntryExists', { targetText: payload.target_text, default: `Entry for "${payload.target_text}" already exists.` }));
  				 await window.electronAPI.addLogEntry(selectedLanguageName, payload);
@@ -387,23 +424,33 @@ const GrammarLogView: React.FC = () => {
   };
 	const createTimestampTitle = (entry: LogEntry) => `Added: ${formatLocalDate(entry.created_at)}\nUpdated: ${formatLocalDate(entry.updated_at)}`;
 
+  const handleColumnSettingsToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setColumnSettingsAnchorEl(columnSettingsAnchorEl ? null : event.currentTarget);
+  };
+
+  const handleColumnVisibilityChange = (columnId: string, isVisible: boolean) => {
+    setColumnVisibility(prev => {
+      const newVisibility = { ...prev, [columnId]: isVisible };
+      if (selectedLanguageName && window.electronAPI?.setLanguageUISetting) {
+        window.electronAPI.setLanguageUISetting(selectedLanguageName, 'grammar_log_column_visibility', JSON.stringify(newVisibility))
+          .catch((err: Error) => console.error("Error saving column visibility:", err));
+      }
+      return newVisibility;
+    });
+  };
+
   const renderCellContent = useCallback((entry: LogEntry, columnId: string) => { 
     switch (columnId) {
       case 'id': return <span title={createTimestampTitle(entry)} style={{cursor: 'help'}}>{entry.id}</span>;
       case 'target_text': 
-        // If character_form is present and no script_annotations, just show target_text (which might be character_form or user input)
-        // If script_annotations are present, use RenderWithAnnotations with target_text. This assumes target_text is the text to be annotated.
-        // If character_form exists, target_text is often (but not always) the same as character_form.
-        // The goal of RenderWithAnnotations is to show annotations *on* a given text.
         return (entry.script_annotations && entry.script_annotations.length > 0)
                  ? <RenderWithAnnotations text={entry.target_text} scriptAnnotations={entry.script_annotations} theme={theme} />
                  : <>{entry.target_text}</>;
       case 'native_text': return entry.native_text ?? '';
       case 'category': return entry.category ?? '';
-      case 'character_form': // Updated
-        // Render character_form. If script_annotations exist, apply them to character_form.
+      case 'character_form': 
         return <RenderWithAnnotations text={entry.character_form} scriptAnnotations={entry.script_annotations} theme={theme} />;
-      case 'reading_form': return entry.reading_form ?? ''; // Updated
+      case 'reading_form': return entry.reading_form ?? '';
       case 'romanization': return entry.romanization ?? '';
       case 'notes': {
         const exampleTooltip = entry.example_sentence 
@@ -432,7 +479,7 @@ const GrammarLogView: React.FC = () => {
         );
       default: return null;
     }
-  }, [t, isDeleting, selectedLanguageName, theme, createTimestampTitle, openEntryModal, handleDeleteEntry]); 
+  }, [t, isDeleting, theme, createTimestampTitle, openEntryModal, handleDeleteEntry]);
 
   if (!selectedLanguageName) { return <div style={{ padding: '20px' }}>{t('errors.selectLanguagePrompt', {default: 'Please select a language to view the grammar log.'})}</div>; }
 
@@ -449,7 +496,7 @@ const GrammarLogView: React.FC = () => {
 					</button>
 				</div>
 			</div>
-      <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '4px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '4px', alignItems: 'center', position: 'relative' }}>
            <label htmlFor="search-term" style={{whiteSpace: 'nowrap'}}>{t('grammarLogView.searchLabel')}</label>
           <input id="search-term" type="text" placeholder={t('grammarLogView.searchPlaceholder')} value={searchTerm} onChange={handleSearchChange} style={{ padding: '8px', flexGrow: 1 }}/>
            <label htmlFor="category-filter" style={{whiteSpace: 'nowrap'}}>{t('grammarLogView.categoryLabel')}</label>
@@ -457,6 +504,23 @@ const GrammarLogView: React.FC = () => {
               <option value="">{t('grammarLogView.allCategories')}</option>
               {GRAMMAR_CATEGORIES.map(cat => (<option key={cat} value={cat}>{cat}</option>))}
           </select>
+          <button 
+            onClick={handleColumnSettingsToggle} 
+            title={t('grammarLogView.columnSettings.buttonTooltip', { default: 'Column Settings' })}
+            style={{ padding: '6px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', background: 'none', marginLeft: '10px', fontSize: '1.2em' }}
+          >
+            📝 {/* Changed icon */}
+          </button>
+          <ColumnSettingsPopover
+            isOpen={Boolean(columnSettingsAnchorEl)}
+            onClose={() => setColumnSettingsAnchorEl(null)}
+            anchorEl={columnSettingsAnchorEl}
+            allToggleableColumns={ALL_COLUMN_CONFIGS.filter(c => c.isDraggable)} 
+            currentVisibility={columnVisibility}
+            onVisibilityChange={handleColumnVisibilityChange}
+            t={t}
+            theme={theme}
+          />
       </div>
 			{isConfirmingClear && selectedLanguageName && ( 
         <div style={{ border: '1px solid orange', padding: '10px', marginBottom: '15px', backgroundColor: '#fff3e0' }}>
@@ -497,7 +561,7 @@ const GrammarLogView: React.FC = () => {
               <table className="grammar-log-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #ccc', textAlign: 'left' }}>
-                    <SortableContext items={orderedDraggableColumnIds} strategy={horizontalListSortingStrategy}>
+                    <SortableContext items={orderedDraggableColumnIds.filter(id => columnVisibility[id] !== false)} strategy={horizontalListSortingStrategy}>
                       {currentDisplayColumnConfigs.map(config => (
                           <SortableHeaderCell
                             key={config.id}
@@ -532,10 +596,10 @@ const GrammarLogView: React.FC = () => {
 					isOpen={isModalOpen}
 					onClose={closeEntryModal}
 					onSave={handleModalSave}
-					initialData={editingEntry ? { // Updated to reflect LogEntryData structure
+					initialData={editingEntry ? {
 						...editingEntry, 
             script_annotations: editingEntry.script_annotations ?? undefined, 
-					} : { script_annotations: undefined } as Partial<LogEntryData>} // Ensure default is also Partial<LogEntryData>
+					} : { script_annotations: undefined } as Partial<LogEntryData>}
 					mode={editingEntry ? 'edit' : 'add'}
           isSubmitting={isSubmittingEntry}
           submitError={modalError}

@@ -18,7 +18,8 @@
     "cancel": "Cancel",
     "addLanguage": "Add Language",
     "switchLanguage": "Switch Language",
-    "confirmDelete": "Yes, Delete All"
+    "confirmDelete": "Yes, Delete All",
+    "close": "Close"
   },
   "welcomeScreen": {
     "title": "Welcome to Lingo",
@@ -72,6 +73,10 @@
       "sortByKanji": "Sort by Kanji/Character Form", 
       "sortByReading": "Sort by Kana/Reading Form", 
       "viewNotes": "View/Sort Notes"
+    },
+    "columnSettings": {
+      "title": "Column Visibility",
+      "buttonTooltip": "Configure Visible Columns"
     },
     "clearLogConfirm": "Are you sure you want to delete the entire log file for {language}? This cannot be undone.",
     "noEntries": "No log entries found for this language. Click '+ Add Entry' or 'Clear Log' above.",

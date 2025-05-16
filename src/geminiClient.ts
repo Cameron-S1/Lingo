@@ -77,8 +77,8 @@ Each JSON object in the array MUST have the following structure. Provide null fo
   "example_sentence": "If the item itself is a full example sentence, put it here. Optional.",
   "date_context": "If a date clearly associated with the learning entry (e.g., as a header or section marker like #YYYY-MM-DD, YYYY/MM/DD, MM/DD/YYYY, YYYY Month D, #YYYYMonthDD, 'Date: YYYY-MM-DD', etc.) precedes this item or seems to define its context, include the recognized date formatted as YYYY-MM-DD. Prioritize dates that appear to mark when content was learned or noted. Otherwise null. Optional.",
   "character_form": "If the target_text involves specific characters such as Japanese Kanji, Chinese Hanzi, Korean Hanja, or other primary ideographic/logographic/syllabic scripts, list the primary character form here (e.g., '交わる' for Japanese). This field is for the main script representation if distinct from a purely phonetic or romanized target_text. Optional.",
-  "reading_form": "If the language uses a distinct phonetic script for reading or transcription (e.g., Japanese Kana, Hangul for Hanja readings, IPA for broader phonetics if relevant), provide the full phonetic representation here (e.g., 'まじわる' for Japanese '交わる'). This should correspond to the reading of the 'character_form' or 'target_text'. Optional.",
-  "romanization": "Provide a standard romanization if applicable (e.g., Hepburn for Japanese 'majiwaru', Pinyin for Chinese). Specify system if non-obvious in notes. Optional.",
+  "reading_form": "This field is for phonetic representation. IF the language of 'target_text' uses a standard phonetic script (e.g., Japanese Kana like 'まじわる' for '交わる'; Korean Hangul for Hanja readings), provide that full script here. FOR ALL OTHER LANGUAGES (e.g., English, Spanish, French, German, etc.) that DO NOT use such a distinct phonetic script for common writing, you MUST generate an International Phonetic Alphabet (IPA) transcription (e.g., for English 'example', IPA: /ɪɡˈzæmpəl/; for Spanish 'hola', IPA: /ˈola/). This IPA transcription is a CRITICAL requirement for these languages. The content of 'reading_form' must correspond to the pronunciation of 'target_text' or 'character_form'. If, after a genuine attempt, accurate phonetic information (either script or IPA) cannot be provided (e.g., for very obscure terms or non-linguistic symbols), this field MUST BE null or an empty string. Do not guess wildly; accuracy is key. This field is vital for user pronunciation.",
+  "romanization": "Provide a standard romanization. If the 'target_text' is already in a Roman-based script (like English, Spanish, French), then 'romanization' SHOULD typically be the SAME AS 'target_text' unless a specific, different romanization system is standard for that word or context. For non-Roman scripts (e.g., Japanese, Chinese, Arabic), provide a standard romanization (e.g., Hepburn for Japanese 'majiwaru', Pinyin for Chinese). Specify system if non-obvious in notes. This field is crucial for consistent display and search. Optional, but STRONGLY PREFERRED, especially if 'target_text' might contain non-Roman characters or if 'character_form' is used.",
   "writing_system_note": "A brief note about the writing system if noteworthy (e.g., 'Kanji+Okurigana', 'Katakana only', 'Hanja with Hangul reading'). Optional.",
   "script_annotations": null /* Placeholder. See detailed script annotation instructions below. */
 }
@@ -171,11 +171,11 @@ Each JSON object in the array MUST have the following structure. Provide null fo
                     if (attempt < MAX_RETRIES) {
                         attempt++;
                         const delayMs = RATE_LIMIT_RETRY_DELAY_MS; 
-                        log.warn(`Rate limit hit (status ${response.status}). Retrying attempt ${attempt}/${MAX_RETRIES} after ${delayMs}ms...`);
+                        log.warn(`Rate limit hit (status ${response.status}). Retrying attempt ${attempt +1}/${MAX_RETRIES +1} after ${delayMs}ms...`); // Corrected retry log
                         await new Promise(resolve => setTimeout(resolve, delayMs));
                         continue; 
                     } else {
-                        log.error(`Max retries (${MAX_RETRIES}) reached for rate limit error.`);
+                        log.error(`Max retries (${MAX_RETRIES +1}) reached for rate limit error.`); // Corrected retry log
                         const rateLimitError = new Error("API_RATE_LIMIT_EXCEEDED");
                         (rateLimitError as any).details = errorJson || errorBodyText;
                         throw rateLimitError;
@@ -199,7 +199,7 @@ Each JSON object in the array MUST have the following structure. Provide null fo
                     throw error; 
                  }
                 attempt++;
-                log.warn(`Network or potentially transient error. Retrying attempt ${attempt}/${MAX_RETRIES} after ${currentExponentialBackoffMs}ms...`);
+                log.warn(`Network or potentially transient error. Retrying attempt ${attempt +1}/${MAX_RETRIES +1} after ${currentExponentialBackoffMs}ms...`); // Corrected retry log
                 await new Promise(resolve => setTimeout(resolve, currentExponentialBackoffMs));
                 currentExponentialBackoffMs = Math.min(currentExponentialBackoffMs * 2, MAX_BACKOFF_MS);
                 continue;
