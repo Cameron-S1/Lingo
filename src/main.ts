@@ -20,6 +20,7 @@ import {
   type ReviewType,
   type ReviewStatus,
   type ReviewItemData,
+  type ScriptAnnotationDetail, // Import the new type if needed here, or assume ExtractedItem aligns
   addLogEntry,
   findLogEntryByTarget,
   getLogEntries,
@@ -35,7 +36,7 @@ import {
   deleteReviewItem,
   clearReviewItemsForLanguage
 } from './database';
-import { analyzeNoteContent, type ExtractedItem, type AnalysisResult, type FuriganaDetail } from './geminiClient'; // Added FuriganaDetail here for type clarity
+import { analyzeNoteContent, type ExtractedItem, type AnalysisResult } from './geminiClient'; 
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import mammoth from 'mammoth';
@@ -135,7 +136,24 @@ app.whenReady().then(() => {
    ipcMain.handle('db:addLogEntry', async (_event, languageName: string, data: LogEntryData) => {
      console.log(`IPC: Handling db:addLogEntry for language: ${languageName}`);
      try {
-       if (!languageName || !data || typeof data !== 'object' || !data.target_text) { throw new Error('Invalid language name or log entry data provided.'); }
+       if (!languageName || !data || typeof data !== 'object') { throw new Error('Invalid language name or log entry data provided.'); }
+       
+       // Auto-populate target_text if empty (Task 1.4)
+       if (!data.target_text?.trim()) {
+           data.target_text = data.character_form?.trim() || 
+                              data.reading_form?.trim() || 
+                              data.romanization?.trim() || 
+                              ''; 
+           if (!data.target_text) {
+               log.warn(`target_text could not be auto-populated for new entry in ${languageName} as character_form, reading_form, and romanization are all empty. Data:`, data);
+               // Depending on strictness, could throw an error here if target_text is mandatory
+               // For now, allow it to proceed; database might have NOT NULL constraint if it's critical
+           }
+       }
+       if (!data.target_text && !data.character_form && !data.reading_form && !data.romanization) { // Stricter check
+          throw new Error('Cannot add log entry: Target text, character form, reading form, and romanization are all empty.');
+       }
+
        return await addLogEntry(languageName, data);
      } catch (error) { log.error(`Error handling db:addLogEntry for ${languageName}:`, error); throw error; }
    });
@@ -165,6 +183,23 @@ app.whenReady().then(() => {
      console.log(`IPC: Handling db:updateLogEntry (Lang: ${languageName}, ID: ${id})`);
      try {
        if (!languageName || id == null || typeof updates !== 'object' || Object.keys(updates).length === 0) { throw new Error('Invalid arguments for updateLogEntry.'); }
+       
+       // Simplified target_text auto-population for updates (Task 1.4)
+       // If target_text is explicitly being set to empty in the updates payload
+       if (updates.target_text !== undefined && updates.target_text.trim() === '') {
+           const charForm = updates.character_form ?? ''; // Check updates first
+           const readForm = updates.reading_form ?? '';
+           const romanForm = updates.romanization ?? '';
+
+           updates.target_text = charForm.trim() || readForm.trim() || romanForm.trim() || '';
+           if (!updates.target_text) {
+               log.warn(`Update for entry ID ${id} in ${languageName} attempts to set target_text to empty, and auto-population from other updated fields also resulted in empty.`);
+               // Consider fetching existing record to populate from non-updated fields if this behavior is desired.
+               // For now, if all sources in `updates` are empty, target_text becomes empty.
+               // This might be an issue if the intent was to clear target_text but other forms still exist on the DB record.
+           }
+       }
+
        return await updateLogEntry(languageName, id, updates);
      } catch (error) { log.error(`Error handling db:updateLogEntry for ${languageName}, ID ${id}:`, error); throw error; }
    });
@@ -235,6 +270,10 @@ app.whenReady().then(() => {
        let itemsForReview = 0;
        let entriesUpdated = 0; 
 
+       // Assuming ExtractedItem from geminiClient now provides fields like:
+       // character_form, reading_form, script_annotations, romanization, etc.
+       // and script_annotations is ScriptAnnotationDetail[] | null
+
        try {
            const fileExtension = path.extname(filePath).toLowerCase();
            if (fileExtension === '.docx') {
@@ -267,21 +306,30 @@ app.whenReady().then(() => {
                 return { added: 0, reviewed: itemsForReview, updated: 0, fileName, skippedDueToRateLimit: true };
            } else if (analysisResult.extractedItems && analysisResult.extractedItems.length > 0) {
                log.info(`AI analysis for ${fileName} returned ${analysisResult.extractedItems.length} items.`);
-               for (const item of analysisResult.extractedItems) {
-                   if (!item.target_text || typeof item.target_text !== 'string' || item.target_text.trim() === '') {
-                       log.warn(`Item from ${fileName} has missing target_text. Creating review item for ${languageName}. Item:`, JSON.stringify(item).substring(0, 200));
+               for (const item of analysisResult.extractedItems) { // item is ExtractedItem
+                   let currentTargetText = item.target_text; // Assuming item provides target_text
+                   if (!currentTargetText?.trim()) {
+                       currentTargetText = item.character_form?.trim() || 
+                                         item.reading_form?.trim() || 
+                                         item.romanization?.trim() || 
+                                         '';
+                   }
+
+                   if (!currentTargetText?.trim()) {
+                       log.warn(`Item from ${fileName} has effectively missing target_text even after fallbacks. Creating review item for ${languageName}. Item:`, JSON.stringify(item).substring(0, 200));
                        const reviewData: ReviewItemData = {
                            review_type: 'parsing_assist',
                            original_snippet: item.original_snippet ?? `Raw item data: ${JSON.stringify(item).substring(0, 400)}`,
-                           ai_suggestion: 'Item from AI response has invalid target_text (missing, empty, or not a string).',
+                           ai_suggestion: 'Item from AI response has invalid target_text (missing or empty after fallbacks).',
                            source_note_processed_id: sourceNoteId
                        };
                        try { await addReviewItem(languageName, reviewData); itemsForReview++; }
                        catch (revErr) { log.error(`Failed to add review item for invalid target_text in ${fileName} for ${languageName}:`, revErr); }
                        continue;
                    }
+
                    try {
-                       const existing: LogEntry | null = await findLogEntryByTarget(languageName, item.target_text);
+                       const existing: LogEntry | null = await findLogEntryByTarget(languageName, currentTargetText);
                        if (existing) {
                            const isPotentialHomonym = 
                                existing.native_text && existing.native_text.trim() !== '' &&
@@ -289,16 +337,16 @@ app.whenReady().then(() => {
                                existing.native_text.trim().toLowerCase() !== item.native_text.trim().toLowerCase();
 
                            if (isPotentialHomonym) {
-                               log.warn(`Potential homonym conflict for "${item.target_text}" (Existing ID: ${existing.id}). Existing native: "${existing.native_text}", New AI native: "${item.native_text}". Creating review item.`);
+                               log.warn(`Potential homonym conflict for "${currentTargetText}" (Existing ID: ${existing.id}). Existing native: "${existing.native_text}", New AI native: "${item.native_text}". Creating review item.`);
                                const reviewData: ReviewItemData = {
                                    review_type: 'duplicate', 
-                                   target_text: item.target_text,
+                                   target_text: currentTargetText,
                                    native_text: item.native_text, 
-                                   ai_suggestion: `Potential homonym: Existing entry (ID: ${existing.id}) for "${item.target_text}" has native text: "${existing.native_text}". AI proposed a different native text: "${item.native_text}". Please review.`,
-                                   original_snippet: item.original_snippet || item.target_text.substring(0,500),
+                                   ai_suggestion: `Potential homonym: Existing entry (ID: ${existing.id}) for "${currentTargetText}" has native text: "${existing.native_text}". AI proposed a different native text: "${item.native_text}". Please review.`,
+                                   original_snippet: item.original_snippet || currentTargetText.substring(0,500),
                                    related_log_entry_id: existing.id,
-                                   ai_extracted_kanji_form: item.kanji_form,
-                                   ai_extracted_kana_form: item.kana_form,
+                                   ai_extracted_character_form: item.character_form, // New field name
+                                   ai_extracted_reading_form: item.reading_form,   // New field name
                                    ai_extracted_romanization: item.romanization,
                                    category_guess: item.category_guess,
                                    source_note_processed_id: sourceNoteId
@@ -314,59 +362,60 @@ app.whenReady().then(() => {
                                if ((!existing.category || existing.category.trim() === '') && item.category_guess) { updates.category = item.category_guess; madeUpdate = true; }
                                if (item.notes && (!existing.notes || item.notes.length > (existing.notes || '').length)) { updates.notes = item.notes; madeUpdate = true; }
                                if ((!existing.example_sentence || existing.example_sentence.trim() === '') && item.example_sentence) { updates.example_sentence = item.example_sentence; madeUpdate = true; }
-                               if ((!existing.kanji_form || existing.kanji_form.trim() === '') && item.kanji_form) { updates.kanji_form = item.kanji_form; madeUpdate = true; }
-                               if ((!existing.kana_form || existing.kana_form.trim() === '') && item.kana_form) { updates.kana_form = item.kana_form; madeUpdate = true; }
+                               if ((!existing.character_form || existing.character_form.trim() === '') && item.character_form) { updates.character_form = item.character_form; madeUpdate = true; }
+                               if ((!existing.reading_form || existing.reading_form.trim() === '') && item.reading_form) { updates.reading_form = item.reading_form; madeUpdate = true; }
                                if ((!existing.romanization || existing.romanization.trim() === '') && item.romanization) { updates.romanization = item.romanization; madeUpdate = true; }
                                if ((!existing.writing_system_note || existing.writing_system_note.trim() === '') && item.writing_system_note) { updates.writing_system_note = item.writing_system_note; madeUpdate = true; }
-                               // Check and add/update furigana_details
-                               if (item.furigana_details && (!existing.furigana_details || JSON.stringify(existing.furigana_details) !== JSON.stringify(item.furigana_details))) {
-                                    updates.furigana_details = item.furigana_details;
+                               
+                               if (item.script_annotations && (!existing.script_annotations || JSON.stringify(existing.script_annotations) !== JSON.stringify(item.script_annotations))) {
+                                    updates.script_annotations = item.script_annotations;
                                     madeUpdate = true;
-                               } else if (!item.furigana_details && existing.furigana_details) { // If AI returns null but DB has it, preserve DB? Or clear it? For now, let's clear.
-                                    updates.furigana_details = null; // Explicitly set to null if AI doesn't provide it
+                               } else if (!item.script_annotations && existing.script_annotations) { 
+                                    updates.script_annotations = null; 
                                     madeUpdate = true;
                                }
 
                                if (madeUpdate && Object.keys(updates).length > 0) {
                                    await updateLogEntry(languageName, existing.id, updates);
                                    entriesUpdated++;
-                                   log.info(`Merged new AI data into existing entry ID ${existing.id} ('${item.target_text}'). Updates: ${JSON.stringify(updates)}`);
+                                   log.info(`Merged new AI data into existing entry ID ${existing.id} ('${currentTargetText}'). Updates: ${JSON.stringify(updates)}`);
                                } else {
-                                   log.info(`Duplicate item for target "${item.target_text}" (ID ${existing.id}), no new information to merge (or not a homonym conflict). Skipping.`);
+                                   log.info(`Duplicate item for target "${currentTargetText}" (ID ${existing.id}), no new information to merge (or not a homonym conflict). Skipping.`);
                                }
                            }
                        } else { 
                            const entryData: LogEntryData = {
-                                target_text: item.target_text,
+                                target_text: currentTargetText, // Already determined
                                 native_text: item.native_text ?? null,
                                 category: item.category_guess ?? 'Other',
                                 notes: item.notes ?? null,
                                 example_sentence: item.example_sentence ?? null,
-                                kanji_form: item.kanji_form ?? null,
-                                kana_form: item.kana_form ?? null,
+                                character_form: item.character_form ?? null, // New field name
+                                reading_form: item.reading_form ?? null,   // New field name
                                 romanization: item.romanization ?? null,
                                 writing_system_note: item.writing_system_note ?? null,
-                                furigana_details: item.furigana_details ?? null // Pass furigana_details here
+                                script_annotations: item.script_annotations ?? null // New field name
                             };
                            try {
-                               await addLogEntry(languageName, entryData); entriesAdded++;
+                               await addLogEntry(languageName, entryData); // addLogEntry itself will handle final target_text if still needed
+                               entriesAdded++;
                            } catch (addErr: any) { 
-                               log.error(`Error adding new log entry for ${fileName} (target: ${item.target_text}), creating review item:`, addErr);
+                               log.error(`Error adding new log entry for ${fileName} (target: ${currentTargetText}), creating review item:`, addErr);
                                const reviewData: ReviewItemData = {
                                     review_type: 'parsing_assist',
-                                    target_text: item.target_text, native_text: item.native_text,
-                                    original_snippet: item.original_snippet ?? item.target_text.substring(0,500),
-                                    ai_suggestion: `Failed to add entry: ${addErr.message}. AI data: cat='${item.category_guess}', kanji='${item.kanji_form}'`,
+                                    target_text: currentTargetText, native_text: item.native_text,
+                                    original_snippet: item.original_snippet ?? currentTargetText.substring(0,500),
+                                    ai_suggestion: `Failed to add entry: ${addErr.message}. AI data: cat='${item.category_guess}', charForm='${item.character_form}'`, // Updated field name
                                     source_note_processed_id: sourceNoteId
                                 };
                                await addReviewItem(languageName, reviewData); itemsForReview++;
                            }
                        }
                    } catch (dbOpError: any) {
-                        log.error(`Database error during item processing for ${fileName} (target: ${item.target_text}):`, dbOpError);
+                        log.error(`Database error during item processing for ${fileName} (target: ${currentTargetText}):`, dbOpError);
                         const reviewData: ReviewItemData = {
                             review_type: 'parsing_assist',
-                            target_text: item.target_text,
+                            target_text: currentTargetText,
                             original_snippet: item.original_snippet ?? `Error processing item. Raw: ${JSON.stringify(item).substring(0,350)}`,
                             ai_suggestion: `DB operation error: ${dbOpError.message}`,
                             source_note_processed_id: sourceNoteId

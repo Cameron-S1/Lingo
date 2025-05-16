@@ -18,7 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { useLanguage } from '../contexts/LanguageContext';
-import type { LogEntry, LogEntryData, GetLogEntriesOptions, FuriganaDetail } from '../database';
+import type { LogEntry, LogEntryData, GetLogEntriesOptions, ScriptAnnotationDetail } from '../database'; // Updated FuriganaDetail to ScriptAnnotationDetail
 import Modal from './Modal';
 import { GRAMMAR_CATEGORIES } from '../constants';
 import { useUI } from '../contexts/UIContext';
@@ -26,7 +26,7 @@ import { useUI } from '../contexts/UIContext';
 type DataSortableColumnKey = NonNullable<GetLogEntriesOptions['sortBy']>;
 
 interface ColumnConfig {
-  id: string;
+  id: string; // Will match new field names like 'character_form'
   headerKey: string; 
   tooltipKey: string; 
   dataSortKey?: DataSortableColumnKey;
@@ -35,7 +35,7 @@ interface ColumnConfig {
   className?: string; 
 }
 
-// Helper to check for Kanji characters (simplified range)
+// Helper to check for Kanji characters (simplified range) - may need to be generalized later
 const isKanji = (char: string): boolean => {
   if (!char || char.length !== 1) return false;
   const charCode = char.charCodeAt(0);
@@ -44,9 +44,10 @@ const isKanji = (char: string): boolean => {
          (charCode >= 0xF900 && charCode <= 0xFAFF);   
 };
 
-const RenderWithFurigana: React.FC<{ text: string | null | undefined, furiganaDetails?: FuriganaDetail[] | null, theme: string }> = ({ text, furiganaDetails, theme }) => {
+// Renamed from RenderWithFurigana
+const RenderWithAnnotations: React.FC<{ text: string | null | undefined, scriptAnnotations?: ScriptAnnotationDetail[] | null, theme: string }> = ({ text, scriptAnnotations, theme }) => {
   if (!text) return <>{''}</>;
-  if (!furiganaDetails || furiganaDetails.length === 0) {
+  if (!scriptAnnotations || scriptAnnotations.length === 0) {
     return <>{text}</>;
   }
 
@@ -72,21 +73,23 @@ const RenderWithFurigana: React.FC<{ text: string | null | undefined, furiganaDe
   };
 
   const elements: React.ReactNode[] = [];
-  const furiganaMap = new Map<string, string>();
-  if(furiganaDetails){
-      furiganaDetails.forEach(detail => {
-        furiganaMap.set(detail.char, detail.reading);
+  const annotationMap = new Map<string, string>(); // Maps base_character to annotation_text
+  if(scriptAnnotations){
+      scriptAnnotations.forEach(detail => {
+        // Assuming detail.type === 'reading' for now, as per AI prompt
+        annotationMap.set(detail.base_character, detail.annotation_text);
       });
   }
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    if (isKanji(char) && furiganaMap.has(char)) {
+    // The isKanji check could be made more generic based on language or annotation type in the future
+    if (isKanji(char) && annotationMap.has(char)) { 
       elements.push(
         <ruby key={`ruby-${char}-${i}`} className="ruby-hover-wrapper" style={rubyWrapperStyle}>
           <span>{char}</span>
           <rt style={rtBaseStyle} className="ruby-text-hover">
-            {furiganaMap.get(char)}
+            {annotationMap.get(char)}
           </rt>
         </ruby>
       );
@@ -125,12 +128,13 @@ const SortableHeaderCell: React.FC<SortableHeaderCellProps> = ({ config, onSortC
   };
 
   const handleHeaderClick = () => { if (config.dataSortKey && onSortClick) onSortClick(config.dataSortKey); };
+  // TODO: Use getFieldDisplayName from UIContext for config.headerKey for language-specific aliases
   return <th ref={setNodeRef} style={style} className={config.className} {...(config.isDraggable ? attributes : {})} {...(config.isDraggable ? listeners : {})} onClick={handleHeaderClick} title={t(config.tooltipKey)}>{t(config.headerKey)}{config.dataSortKey && getSortIndicator(config.dataSortKey)}</th>;
 };
 
 const GrammarLogView: React.FC = () => {
   const { selectedLanguageName, selectLanguage } = useLanguage();
-  const { t, theme } = useUI(); 
+  const { t, theme } = useUI(); // TODO: Later, get getFieldDisplayName from useUI
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,19 +159,20 @@ const GrammarLogView: React.FC = () => {
     { id: 'target_text', headerKey: 'grammarLogView.headers.target', tooltipKey: 'grammarLogView.tooltips.sortByTarget', dataSortKey: 'target_text', isDraggable: true, className: 'col-target-text' },
     { id: 'native_text', headerKey: 'grammarLogView.headers.native', tooltipKey: 'grammarLogView.tooltips.sortByNative', dataSortKey: 'native_text', isDraggable: true, className: 'col-native-text' },
     { id: 'category', headerKey: 'grammarLogView.headers.category', tooltipKey: 'grammarLogView.tooltips.sortByCategory', dataSortKey: 'category', isDraggable: true, className: 'col-category' },
-    { id: 'kanji_form', headerKey: 'grammarLogView.headers.kanji', tooltipKey: 'grammarLogView.tooltips.sortByKanji', dataSortKey: 'kanji_form', isDraggable: true, className: 'col-kanji-form' },
-    { id: 'kana_form', headerKey: 'grammarLogView.headers.reading', tooltipKey: 'grammarLogView.tooltips.sortByReading', dataSortKey: 'kana_form', isDraggable: true, className: 'col-kana-form' },
+    { id: 'character_form', headerKey: 'grammarLogView.headers.character_form', tooltipKey: 'grammarLogView.tooltips.sortByCharacterForm', dataSortKey: 'character_form', isDraggable: true, className: 'col-character-form' }, // Updated
+    { id: 'reading_form', headerKey: 'grammarLogView.headers.reading_form', tooltipKey: 'grammarLogView.tooltips.sortByReadingForm', dataSortKey: 'reading_form', isDraggable: true, className: 'col-reading-form' }, // Updated
     { id: 'romanization', headerKey: 'grammarLogView.headers.romanization', tooltipKey: 'grammarLogView.tooltips.sortByRomanization', dataSortKey: 'romanization', isDraggable: true, className: 'col-romanization' },
-    { id: 'notes', headerKey: 'grammarLogView.headers.notes', tooltipKey: 'grammarLogView.tooltips.viewNotes', isDraggable: true, className: 'col-notes' },
+    { id: 'notes', headerKey: 'grammarLogView.headers.notes', tooltipKey: 'grammarLogView.tooltips.viewNotes', isDraggable: true, className: 'col-notes' }, // No dataSortKey for notes
     { id: 'actions', headerKey: 'grammarLogView.headers.actions', tooltipKey: 'grammarLogView.tooltips.actions', isDraggable: false, minWidth: '100px', className: 'col-actions' },
-  ], [t]); 
+  ], [t]); // t dependency remains for now for tooltip strings
 
-  const DEFAULT_DRAGGABLE_COLUMN_IDS = ['kanji_form', 'kana_form', 'romanization', 'native_text', 'category', 'notes'];
+  const DEFAULT_DRAGGABLE_COLUMN_IDS = ['character_form', 'reading_form', 'romanization', 'native_text', 'category', 'notes']; // Updated
   const [orderedDraggableColumnIds, setOrderedDraggableColumnIds] = useState<string[]>(DEFAULT_DRAGGABLE_COLUMN_IDS);
-  const fixedLeftColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'id');
+  const fixedLeftColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'id'); // target_text is now draggable
   const fixedRightColumnConfigs = ALL_COLUMN_CONFIGS.filter(c => !c.isDraggable && c.id === 'actions');
 
   const currentDisplayColumnConfigs = React.useMemo(() => { 
+      // TODO: Later, filter draggableConfigsInOrder based on isFieldVisible from UIContext for reading_form
       const draggableConfigsInOrder = orderedDraggableColumnIds
         .map(id => ALL_COLUMN_CONFIGS.find(c => c.id === id && c.isDraggable))
         .filter(Boolean) as ColumnConfig[];
@@ -203,7 +208,7 @@ const GrammarLogView: React.FC = () => {
             setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); 
         });
     } else { setOrderedDraggableColumnIds(DEFAULT_DRAGGABLE_COLUMN_IDS); }
-  }, [selectedLanguageName, ALL_COLUMN_CONFIGS]);
+  }, [selectedLanguageName, ALL_COLUMN_CONFIGS]); // ALL_COLUMN_CONFIGS dependency is important
 
   const handleDragEnd = (event: DragEndEvent) => { 
     const { active, over } = event;
@@ -259,8 +264,8 @@ const GrammarLogView: React.FC = () => {
 	const handleModalSave = async (formDataFromModal: Partial<LogEntryData>) => { 
  		setIsSubmittingEntry(true);
  		setModalError(null);
-		if (!formDataFromModal.target_text?.trim() && !formDataFromModal.kanji_form?.trim()) {
-			setModalError(t('modal.validation.targetOrKanjiEmpty', { default: "Target text or Kanji/Character form cannot both be empty."}));
+		if (!formDataFromModal.target_text?.trim() && !formDataFromModal.character_form?.trim()) { // Updated
+			setModalError(t('modal.validation.targetOrCharacterEmpty', { default: "Target text or Character form cannot both be empty."})); // Key updated
 			setIsSubmittingEntry(false);
 			return;
 		}
@@ -269,18 +274,19 @@ const GrammarLogView: React.FC = () => {
 			setIsSubmittingEntry(false);
 			return;
 		}
-		const finalTargetText = formDataFromModal.target_text?.trim() || formDataFromModal.kanji_form?.trim() || '';
- 		const payload: LogEntryData = {
-			target_text: finalTargetText,
+		// Target text population logic is now primarily handled in main.ts (IPC handler)
+    // Frontend can still set it, but main.ts will enforce the fallback if empty.
+    const payload: LogEntryData = {
+			target_text: formDataFromModal.target_text || '', // Ensure it's a string
 			native_text: formDataFromModal.native_text?.trim() || null,
 			category: formDataFromModal.category?.trim() || null,
 			notes: formDataFromModal.notes?.trim() || null,
 			example_sentence: formDataFromModal.example_sentence?.trim() || null,
-			kanji_form: formDataFromModal.kanji_form?.trim() || null,
-			kana_form: formDataFromModal.kana_form?.trim() || null,
+			character_form: formDataFromModal.character_form?.trim() || null, // Updated
+			reading_form: formDataFromModal.reading_form?.trim() || null,   // Updated
 			romanization: formDataFromModal.romanization?.trim() || null,
 			writing_system_note: formDataFromModal.writing_system_note?.trim() || null,
-      furigana_details: formDataFromModal.furigana_details || null,
+      script_annotations: formDataFromModal.script_annotations || null, // Updated
  		};
  		try {
  			if (!window.electronAPI) throw new Error('Electron API not available.');
@@ -288,6 +294,7 @@ const GrammarLogView: React.FC = () => {
  				const success = await window.electronAPI.updateLogEntry(selectedLanguageName, editingEntry.id, payload);
  				if (!success) throw new Error(t('errors.updateEntryNotFound', { default: 'Failed to update entry. It might have been deleted.'}));
  			} else {
+        // findLogEntryByTarget should still work with target_text from payload
  				 const existingEntry = await window.electronAPI.findLogEntryByTarget(selectedLanguageName, payload.target_text);
  				 if (existingEntry) throw new Error(t('errors.addLogEntryExists', { targetText: payload.target_text, default: `Entry for "${payload.target_text}" already exists.` }));
  				 await window.electronAPI.addLogEntry(selectedLanguageName, payload);
@@ -384,14 +391,19 @@ const GrammarLogView: React.FC = () => {
     switch (columnId) {
       case 'id': return <span title={createTimestampTitle(entry)} style={{cursor: 'help'}}>{entry.id}</span>;
       case 'target_text': 
-        return (entry.kanji_form || !entry.furigana_details || entry.furigana_details.length === 0) 
-                 ? <>{entry.target_text}</> 
-                 : <RenderWithFurigana text={entry.target_text} furiganaDetails={entry.furigana_details} theme={theme} />;
+        // If character_form is present and no script_annotations, just show target_text (which might be character_form or user input)
+        // If script_annotations are present, use RenderWithAnnotations with target_text. This assumes target_text is the text to be annotated.
+        // If character_form exists, target_text is often (but not always) the same as character_form.
+        // The goal of RenderWithAnnotations is to show annotations *on* a given text.
+        return (entry.script_annotations && entry.script_annotations.length > 0)
+                 ? <RenderWithAnnotations text={entry.target_text} scriptAnnotations={entry.script_annotations} theme={theme} />
+                 : <>{entry.target_text}</>;
       case 'native_text': return entry.native_text ?? '';
       case 'category': return entry.category ?? '';
-      case 'kanji_form': 
-        return <RenderWithFurigana text={entry.kanji_form} furiganaDetails={entry.furigana_details} theme={theme} />;
-      case 'kana_form': return entry.kana_form ?? '';
+      case 'character_form': // Updated
+        // Render character_form. If script_annotations exist, apply them to character_form.
+        return <RenderWithAnnotations text={entry.character_form} scriptAnnotations={entry.script_annotations} theme={theme} />;
+      case 'reading_form': return entry.reading_form ?? ''; // Updated
       case 'romanization': return entry.romanization ?? '';
       case 'notes': {
         const exampleTooltip = entry.example_sentence 
@@ -520,10 +532,10 @@ const GrammarLogView: React.FC = () => {
 					isOpen={isModalOpen}
 					onClose={closeEntryModal}
 					onSave={handleModalSave}
-					initialData={editingEntry ? {
+					initialData={editingEntry ? { // Updated to reflect LogEntryData structure
 						...editingEntry, 
-            furigana_details: editingEntry.furigana_details ?? undefined,
-					} : { furigana_details: undefined }} 
+            script_annotations: editingEntry.script_annotations ?? undefined, 
+					} : { script_annotations: undefined } as Partial<LogEntryData>} // Ensure default is also Partial<LogEntryData>
 					mode={editingEntry ? 'edit' : 'add'}
           isSubmitting={isSubmittingEntry}
           submitError={modalError}

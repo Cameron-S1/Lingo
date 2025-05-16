@@ -7,9 +7,11 @@ log.initialize({ preload: true });
 let apiKey: string | null = null;
 let isKeyLoading: boolean = false;
 
-export interface FuriganaDetail {
-  char: string;    // Should be a single Kanji character
-  reading: string; // Its Hiragana reading
+// Renamed from FuriganaDetail and updated for v1.4
+export interface ScriptAnnotationDetailGemini {
+  base_character: string; // Formerly char, should be a single character like Kanji
+  annotation_text: string; // Formerly reading, its phonetic reading (e.g., Hiragana)
+  type: string; // e.g., 'reading', 'gloss' (AI will be instructed to provide 'reading' for now)
 }
 
 export interface ExtractedItem {
@@ -20,11 +22,11 @@ export interface ExtractedItem {
     notes?: string | null;
     example_sentence?: string | null;
     original_snippet?: string;
-    kanji_form?: string | null;
-    kana_form?: string | null;
+    character_form?: string | null; // formerly kanji_form
+    reading_form?: string | null;   // formerly kana_form
     romanization?: string | null;
     writing_system_note?: string | null;
-    furigana_details?: FuriganaDetail[] | null; // Array of details ONLY for Kanji
+    script_annotations?: ScriptAnnotationDetailGemini[] | null; // formerly furigana_details
 }
 
 export interface AnalysisResult { 
@@ -74,42 +76,43 @@ Each JSON object in the array MUST have the following structure. Provide null fo
   "notes": "Any additional contextual notes or explanations found *directly* associated with the item in the text. Optional.",
   "example_sentence": "If the item itself is a full example sentence, put it here. Optional.",
   "date_context": "If a date clearly associated with the learning entry (e.g., as a header or section marker like #YYYY-MM-DD, YYYY/MM/DD, MM/DD/YYYY, YYYY Month D, #YYYYMonthDD, 'Date: YYYY-MM-DD', etc.) precedes this item or seems to define its context, include the recognized date formatted as YYYY-MM-DD. Prioritize dates that appear to mark when content was learned or noted. Otherwise null. Optional.",
-  "kanji_form": "If the target_text involves specific characters such as Japanese Kanji, Chinese Hanzi, Korean Hanja, or other primary ideographic/logographic/syllabic scripts, list the primary character form here (e.g., '交わる' for Japanese). This field is for the main script representation if distinct from a purely phonetic or romanized target_text. Optional.",
-  "kana_form": "If the language uses a distinct phonetic script for reading or transcription (e.g., Japanese Kana, Hangul for Hanja readings, IPA for broader phonetics if relevant), provide the full phonetic representation here (e.g., 'まじわる' for Japanese '交わる'). This should correspond to the reading of the 'kanji_form' or 'target_text'. Optional.",
+  "character_form": "If the target_text involves specific characters such as Japanese Kanji, Chinese Hanzi, Korean Hanja, or other primary ideographic/logographic/syllabic scripts, list the primary character form here (e.g., '交わる' for Japanese). This field is for the main script representation if distinct from a purely phonetic or romanized target_text. Optional.",
+  "reading_form": "If the language uses a distinct phonetic script for reading or transcription (e.g., Japanese Kana, Hangul for Hanja readings, IPA for broader phonetics if relevant), provide the full phonetic representation here (e.g., 'まじわる' for Japanese '交わる'). This should correspond to the reading of the 'character_form' or 'target_text'. Optional.",
   "romanization": "Provide a standard romanization if applicable (e.g., Hepburn for Japanese 'majiwaru', Pinyin for Chinese). Specify system if non-obvious in notes. Optional.",
   "writing_system_note": "A brief note about the writing system if noteworthy (e.g., 'Kanji+Okurigana', 'Katakana only', 'Hanja with Hangul reading'). Optional.",
-  "furigana_details": null /* Placeholder. See detailed furigana instructions below. */
+  "script_annotations": null /* Placeholder. See detailed script annotation instructions below. */
 }
 
 - Focus only on explicit language learning content.
 - Try to associate items with the most recent preceding date marker if applicable.
 - Ignore metadata, timestamps (unless a date marker), markdown formatting characters (like *, !, [[ ]]), horizontal rules (---, ___), and irrelevant text unless part of an example.
 - Be precise with 'target_text'. Try to identify the base form where appropriate (e.g., for verbs).
-- IMPORTANT: Preserve all original characters, including accents (like Í, ó, á), diacritics, and punctuation, exactly as they appear in the source text within the extracted fields (target_text, native_text, notes, example_sentence, kanji_form, kana_form). Do not normalize or change them.
+- IMPORTANT: Preserve all original characters, including accents (like Í, ó, á), diacritics, and punctuation, exactly as they appear in the source text within the extracted fields (target_text, native_text, notes, example_sentence, character_form, reading_form). Do not normalize or change them.
 - If a line contains both target and native text separated by ' - ', ' : ', '=', '–' (em dash), or '—' (en dash), or within parentheses like 'target (native)', extract both.
 - Treat lines starting with bullets (e.g., *, -, + followed by a space) or numbers (e.g., 1., 2)) as potentially distinct items to be extracted individually if they appear to be language learning entries.
 - Interpret text that appears to be a header (e.g., lines starting with '#', '##', or in all caps followed by a colon or newline) as a potential introduction to a new set of related language items, or as a category/topic if appropriate. Strive to associate subsequent items with such headers if it makes contextual sense.
-- For languages where a primary script form (like 'kanji_form') is provided, the 'target_text' should ideally be the same, or a dictionary/lemma form. The 'kana_form' (or equivalent phonetic script) should then represent the full reading of that primary script or target_text.
+- For languages where a primary script form (like 'character_form') is provided, the 'target_text' should ideally be the same, or a dictionary/lemma form. The 'reading_form' (or equivalent phonetic script) should then represent the full reading of that primary script or target_text.
 
-- For Japanese entries containing Kanji:
-  - Your primary goal for 'furigana_details' is to enable per-character ruby text display ONLY FOR KANJI CHARACTERS.
-  - If 'kanji_form' is provided and contains Kanji characters, AND a corresponding 'kana_form' (full Hiragana reading of 'kanji_form') is also provided:
-    - YOU MUST generate 'furigana_details' EXCLUSIVELY for the Kanji characters found within 'kanji_form'.
-    - This involves identifying each Kanji character in 'kanji_form' and determining its Hiragana reading by aligning it with the 'kana_form'.
-    - Populate 'furigana_details' as an array of objects. Each object MUST represent a SINGLE KANJI CHARACTER from 'kanji_form'.
-      - 'char': The single Kanji character from 'kanji_form'.
-      - 'reading': The corresponding Hiragana reading for that single Kanji character, inferred by aligning 'kanji_form' with 'kana_form'.
-    - DO NOT include non-Kanji characters (like Hiragana or Katakana that are part of 'kanji_form', e.g., Okurigana) in the 'furigana_details' array. These will be rendered as plain text by the application.
-    - The sequence of objects in 'furigana_details' must correspond to the sequence of KANJI CHARACTERS as they appear in 'kanji_form'.
-    - Example 1: 'kanji_form': "食べ物", 'kana_form': "たべもの" -> Expected 'furigana_details': '[{"char": "食", "reading": "た"}, {"char": "物", "reading": "もの"}]' (Okurigana 'べ' is omitted)
-    - Example 2: 'kanji_form': "日本語", 'kana_form': "にほんご" -> Expected 'furigana_details': '[{"char": "日", "reading": "に"}, {"char": "本", "reading": "ほん"}, {"char": "語", "reading": "ご"}]'
-    - Example 3: 'kanji_form': "申込", 'kana_form': "もうしこみ" -> Expected 'furigana_details': '[{"char": "申", "reading": "もうし"}, {"char": "込", "reading": "こみ"}]'
-    - Example 4: 'kanji_form': "静か", 'kana_form': "しずか" -> Expected 'furigana_details': '[{"char": "静", "reading": "しず"}]' (Okurigana 'か' is omitted)
-    - Example 5: 'kanji_form': "歩いて", 'kana_form': "あるいて" -> Expected 'furigana_details': '[{"char": "歩", "reading": "ある"}]' (Okurigana 'いて' is omitted)
-  - If 'kanji_form' contains Kanji but 'kana_form' is missing, attempt to provide 'furigana_details' (only for Kanji) based on common readings.
-  - If 'kanji_form' is null or empty, but 'target_text' contains Japanese Kanji AND 'kana_form' is available for 'target_text': Apply the same generation logic using 'target_text' (its Kanji parts) and 'kana_form', providing details only for Kanji.
-  - If 'kanji_form' (or 'target_text' if applicable) contains NO Kanji characters, or if you are genuinely unable to determine readings for the present Kanji, 'furigana_details' MUST BE null.
-  - The main 'kana_form' field should always represent the complete Hiragana reading of the word/phrase.
+- For Japanese entries containing Kanji (and adaptable for similar character-based languages needing phonetic annotations):
+  - Your primary goal for 'script_annotations' is to enable per-character ruby text display ONLY FOR CHARACTERS IN THE PRIMARY SCRIPT (e.g., Kanji).
+  - If 'character_form' is provided and contains such characters, AND a corresponding 'reading_form' (full phonetic reading of 'character_form') is also provided:
+    - YOU MUST generate 'script_annotations' EXCLUSIVELY for the relevant characters found within 'character_form'.
+    - This involves identifying each relevant character in 'character_form' and determining its phonetic reading by aligning it with the 'reading_form'.
+    - Populate 'script_annotations' as an array of objects. Each object MUST represent a SINGLE RELEVANT CHARACTER from 'character_form'.
+      - 'base_character': The single character from 'character_form'.
+      - 'annotation_text': The corresponding phonetic reading for that single character, inferred by aligning 'character_form' with 'reading_form'.
+      - 'type': Set this to 'reading'.
+    - DO NOT include non-annotated characters (like Hiragana or Katakana that are part of 'character_form', e.g., Okurigana in Japanese) in the 'script_annotations' array. These will be rendered as plain text by the application.
+    - The sequence of objects in 'script_annotations' must correspond to the sequence of RELEVANT CHARACTERS as they appear in 'character_form'.
+    - Example 1 (Japanese): 'character_form': "食べ物", 'reading_form': "たべもの" -> Expected 'script_annotations': '[{"base_character": "食", "annotation_text": "た", "type": "reading"}, {"base_character": "物", "annotation_text": "もの", "type": "reading"}]'
+    - Example 2 (Japanese): 'character_form': "日本語", 'reading_form': "にほんご" -> Expected 'script_annotations': '[{"base_character": "日", "annotation_text": "に", "type": "reading"}, {"base_character": "本", "annotation_text": "ほん", "type": "reading"}, {"base_character": "語", "annotation_text": "ご", "type": "reading"}]'
+    - Example 3 (Japanese): 'character_form': "申込", 'reading_form': "もうしこみ" -> Expected 'script_annotations': '[{"base_character": "申", "annotation_text": "もうし", "type": "reading"}, {"base_character": "込", "annotation_text": "こみ", "type": "reading"}]'
+    - Example 4 (Japanese): 'character_form': "静か", 'reading_form': "しずか" -> Expected 'script_annotations': '[{"base_character": "静", "annotation_text": "しず", "type": "reading"}]'
+    - Example 5 (Japanese): 'character_form': "歩いて", 'reading_form': "あるいて" -> Expected 'script_annotations': '[{"base_character": "歩", "annotation_text": "ある", "type": "reading"}]'
+  - If 'character_form' contains relevant characters but 'reading_form' is missing, attempt to provide 'script_annotations' based on common readings.
+  - If 'character_form' is null or empty, but 'target_text' contains relevant characters (e.g., Japanese Kanji) AND 'reading_form' is available for 'target_text': Apply the same generation logic using 'target_text' (its relevant character parts) and 'reading_form', providing details only for those characters.
+  - If 'character_form' (or 'target_text' if applicable) contains NO characters needing annotation, or if you are genuinely unable to determine readings for the present characters, 'script_annotations' MUST BE null.
+  - The main 'reading_form' field should always represent the complete phonetic reading of the word/phrase.
 
 - Output ONLY the JSON array, nothing else before or after it.`
             }]

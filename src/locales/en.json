@@ -43,11 +43,13 @@
       "target": "Target",
       "native": "Native",
       "category": "Category",
-      "kanji": "Kanji",
-      "reading": "Reading",
+      "character_form": "Character Form",
+      "reading_form": "Reading Form",
       "romanization": "Romanization",
       "notes": "Notes",
-      "actions": "Actions"
+      "actions": "Actions",
+      "kanji": "Kanji", 
+      "reading": "Reading" 
     },
     "notesMarkers": {
       "example": "(Ex)",
@@ -61,12 +63,15 @@
       "sortByTarget": "Sort by Target",
       "sortByNative": "Sort by Native",
       "sortByCategory": "Sort by Category",
-      "sortByKanji": "Sort by Kanji/Character Form",
-      "sortByReading": "Sort by Kana/Reading Form",
+      "sortByCharacterForm": "Sort by Character Form",
+      "sortByReadingForm": "Sort by Reading Form",
       "sortByRomanization": "Sort by Romanization",
       "deleteEntry": "Delete Entry",
       "editEntry": "Edit Entry",
-      "clearLog": "Clear All Entries for {language}"
+      "clearLog": "Clear All Entries for {language}",
+      "sortByKanji": "Sort by Kanji/Character Form", 
+      "sortByReading": "Sort by Kana/Reading Form", 
+      "viewNotes": "View/Sort Notes"
     },
     "clearLogConfirm": "Are you sure you want to delete the entire log file for {language}? This cannot be undone.",
     "noEntries": "No log entries found for this language. Click '+ Add Entry' or 'Clear Log' above.",
@@ -156,8 +161,8 @@
     "categoryLabel": "Category",
     "notesLabel": "Notes",
     "exampleLabel": "Example Sentence",
-    "kanjiLabel": "Kanji/Character Form",
-    "kanaLabel": "Kana/Reading Form",
+    "characterFormLabel": "Character Form", 
+    "readingFormLabel": "Reading Form",   
     "romanizationLabel": "Romanization (e.g., Hepburn)",
     "writingSystemLabel": "Writing System Note",
     "writingSystemPlaceholder": "e.g., Kanji+Okurigana, Katakana",
@@ -166,7 +171,7 @@
     "updateButton": "Update Entry",
     "validation": {
       "targetEmpty": "Target text cannot be empty.",
-      "targetOrKanjiEmpty": "Target text or Kanji/Character form cannot both be empty."
+      "targetOrCharacterEmpty": "Target text or Character form cannot both be empty."
     }
   },
   "errors": {

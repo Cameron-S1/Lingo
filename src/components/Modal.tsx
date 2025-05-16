@@ -1,16 +1,16 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import type { LogEntryData } from '../database'; // Assuming LogEntryData defines the structure
-import { GRAMMAR_CATEGORIES } from '../constants'; // Import the shared categories
-import { useUI } from '../contexts/UIContext'; // For translations
+import type { LogEntryData, ScriptAnnotationDetail } from '../database'; // Updated
+import { GRAMMAR_CATEGORIES } from '../constants'; 
+import { useUI } from '../contexts/UIContext'; 
 
-export interface ModalProps { // Exporting for potential use elsewhere, good practice
+export interface ModalProps { 
 	isOpen: boolean;
 	onClose: () => void;
 	onSave: (data: Partial<LogEntryData>) => Promise<void>;
-	initialData?: Partial<LogEntryData>;
+	initialData?: Partial<LogEntryData>; // LogEntryData now uses new field names
 	mode: 'add' | 'edit';
-	isSubmitting?: boolean; // New prop
-	submitError?: string | null; // New prop
+	isSubmitting?: boolean; 
+	submitError?: string | null; 
 }
 
 const initialFormState: Partial<LogEntryData> = {
@@ -19,10 +19,11 @@ const initialFormState: Partial<LogEntryData> = {
 	category: GRAMMAR_CATEGORIES[0],
 	notes: '',
 	example_sentence: '',
-	kanji_form: '',
-	kana_form: '',
+	character_form: '', // Updated
+	reading_form: '',   // Updated
 	romanization: '',
-	writing_system_note: ''
+	writing_system_note: '',
+  script_annotations: null // Added
 };
 
 const modalOverlayStyle: React.CSSProperties = {
@@ -99,19 +100,23 @@ const Modal: React.FC<ModalProps> = ({
   onSave, 
   initialData, 
   mode, 
-  isSubmitting: parentIsSubmitting, // Renamed to avoid conflict with potential internal state if needed
-  submitError: parentSubmitError    // Renamed for clarity
+  isSubmitting: parentIsSubmitting, 
+  submitError: parentSubmitError    
 }) => {
 	const { t } = useUI(); 
 	const [formData, setFormData] = useState<Partial<LogEntryData>>(initialFormState);
-  // For client-side validation errors within the modal itself
   const [internalFormError, setInternalFormError] = useState<string | null>(null); 
 
 	useEffect(() => {
 		if (isOpen) {
-            setInternalFormError(null); // Clear internal validation errors
-            const defaultState = { ...initialFormState, category: initialFormState.category ?? GRAMMAR_CATEGORIES[0] };
-			setFormData(mode === 'edit' && initialData ? { ...defaultState, ...initialData } : defaultState);
+            setInternalFormError(null); 
+            const defaultStateWithCategory = { 
+              ...initialFormState, 
+              category: initialFormState.category ?? GRAMMAR_CATEGORIES[0],
+              // Ensure script_annotations is initialized from initialData or as null
+              script_annotations: initialData?.script_annotations ?? null 
+            };
+			setFormData(mode === 'edit' && initialData ? { ...defaultStateWithCategory, ...initialData } : defaultStateWithCategory);
 		}
 	}, [isOpen, initialData, mode]);
 
@@ -122,15 +127,12 @@ const Modal: React.FC<ModalProps> = ({
 
 	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
-    setInternalFormError(null); // Clear previous internal validation error
+    setInternalFormError(null); 
 
-		if (!formData.target_text?.trim() && !formData.kanji_form?.trim()) {
-      setInternalFormError(t('modal.validation.targetOrKanjiEmpty', { default: 'Target text or Kanji/Character form cannot both be empty.' }));
+		if (!formData.target_text?.trim() && !formData.character_form?.trim()) { // Updated
+      setInternalFormError(t('modal.validation.targetOrCharacterEmpty', { default: 'Target text or Character form cannot both be empty.' })); // Updated key
 			return;
 		}
-		// onSave is an async function passed from GrammarLogView which handles its own try/catch
-    // and updates parent's isSubmittingEntry and modalError states.
-    // The Modal component itself no longer needs to manage 'isSaving' or re-set 'formError' from the save promise.
 		await onSave({ ...formData }); 
 	};
 
@@ -171,12 +173,12 @@ const Modal: React.FC<ModalProps> = ({
 						<textarea style={textareaStyle} id="example_sentence" name="example_sentence" value={formData.example_sentence ?? ''} onChange={handleChange}></textarea>
 					</div>
 					<div style={formRowStyle}>
-						<label style={labelStyle} htmlFor="kanji_form">{t('modal.kanjiLabel')}</label>
-						<input style={inputStyle} type="text" id="kanji_form" name="kanji_form" value={formData.kanji_form ?? ''} onChange={handleChange} />
+						<label style={labelStyle} htmlFor="character_form">{t('modal.characterFormLabel')}</label> {/* Updated */}
+						<input style={inputStyle} type="text" id="character_form" name="character_form" value={formData.character_form ?? ''} onChange={handleChange} /> {/* Updated */}
 					</div>
 					<div style={formRowStyle}>
-						<label style={labelStyle} htmlFor="kana_form">{t('modal.kanaLabel')}</label>
-						<input style={inputStyle} type="text" id="kana_form" name="kana_form" value={formData.kana_form ?? ''} onChange={handleChange} />
+						<label style={labelStyle} htmlFor="reading_form">{t('modal.readingFormLabel')}</label> {/* Updated */}
+						<input style={inputStyle} type="text" id="reading_form" name="reading_form" value={formData.reading_form ?? ''} onChange={handleChange} /> {/* Updated */}
 					</div>
 					<div style={formRowStyle}>
 						<label style={labelStyle} htmlFor="romanization">{t('modal.romanizationLabel')}</label>
@@ -186,10 +188,9 @@ const Modal: React.FC<ModalProps> = ({
 						<label style={labelStyle} htmlFor="writing_system_note">{t('modal.writingSystemLabel')}</label>
 						<input style={inputStyle} type="text" id="writing_system_note" name="writing_system_note" value={formData.writing_system_note ?? ''} onChange={handleChange} placeholder={t('modal.writingSystemPlaceholder')} />
 					</div>
+          {/* script_annotations is not directly editable in the form for now */}
 
-          {/* Display internal client-side validation error */}
           {internalFormError && <p style={{ color: 'red', marginTop: '10px', marginBottom: '0' }}>{internalFormError}</p>}
-          {/* Display submission error from parent */}
           {parentSubmitError && <p style={{ color: 'red', marginTop: '10px', marginBottom: '0' }}>{parentSubmitError}</p>}
 
 					<div style={buttonContainerStyle}>
